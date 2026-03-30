@@ -221,3 +221,13 @@ a{color:#d7e9ff}
   .toolbar-right button{flex:1}
   select{min-width:0}
 }
+
+.slot-controls{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:10px;align-items:end}
+.slot-controls input[type=number]{width:100%;border-radius:14px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);padding:12px 14px;font:inherit}
+.slot-qty{min-width:0}
+.slot-qty span{display:block;margin-bottom:6px;color:var(--muted);font-size:.82rem}
+.recipe-qty{margin-top:10px;color:#d9c48a;font-size:.83rem;font-weight:600}
+.credits-block{display:grid;gap:4px;max-width:860px}
+.credits-title{color:var(--gold);font-size:.78rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.credits-line strong{color:#fff}
+@media (max-width: 720px){.slot-controls{grid-template-columns:1fr}}

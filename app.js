@@ -66,10 +66,12 @@ function getSelectedFoods() {
   const foods = [];
   for (let i = 0; i < 5; i++) {
     const select = document.getElementById(`slot-${i}`);
+    const qtyInput = document.getElementById(`slot-qty-${i}`);
     const value = select?.value;
     if (!value) continue;
     const food = state.foods.find(f => f.name === value);
-    if (food) foods.push(food);
+    const qty = Math.max(1, Number(qtyInput?.value || 1));
+    if (food) foods.push({ ...food, craftQty: qty });
   }
   return foods;
 }
@@ -110,11 +112,12 @@ function detectDuplicateBuffs(selectedFoods) {
 function aggregateIngredients(selectedFoods) {
   const map = new Map();
   selectedFoods.forEach(food => {
+    const craftQty = Number(food.craftQty || 1);
     (food.ingredients || []).forEach(ing => {
       const current = map.get(ing.name) || { qty: 0, unit: ing.unit || "item", recipes: [] };
-      current.qty += Number(ing.qty || 0);
+      current.qty += Number(ing.qty || 0) * craftQty;
       current.unit = ing.unit || current.unit || "item";
-      current.recipes.push(food.name);
+      current.recipes.push(`${food.name} x${craftQty}`);
       map.set(ing.name, current);
     });
   });
@@ -159,7 +162,9 @@ function renderSelectors(preserve = []) {
   applyFoodFilter();
   selectorsEl.innerHTML = "";
   for (let i = 0; i < 5; i++) {
-    const current = preserve[i] || "";
+    const entry = preserve[i] || {};
+    const current = typeof entry === 'string' ? entry : (entry.name || "");
+    const qty = typeof entry === 'string' ? 1 : (entry.qty || 1);
     const options = ['<option value="">— Choose food —</option>']
       .concat(state.filteredFoods.map(food => {
         const selected = current === food.name ? "selected" : "";
@@ -172,16 +177,32 @@ function renderSelectors(preserve = []) {
           <strong>Slot ${i + 1}</strong>
           <span>${current ? "Selected" : "Empty"}</span>
         </div>
-        <select id="slot-${i}" data-slot="${i}">${options}</select>
+        <div class="slot-controls">
+          <select id="slot-${i}" data-slot="${i}">${options}</select>
+          <label class="slot-qty">
+            <span>Craft qty</span>
+            <input type="number" id="slot-qty-${i}" min="1" step="1" value="${qty}" ${current ? '' : 'disabled'}>
+          </label>
+        </div>
       </div>
     `);
   }
 
   selectorsEl.querySelectorAll("select").forEach(sel => {
     sel.addEventListener("change", () => {
-      const current = Array.from({ length: 5 }, (_, idx) => document.getElementById(`slot-${idx}`)?.value || "");
+      const current = Array.from({ length: 5 }, (_, idx) => ({
+        name: document.getElementById(`slot-${idx}`)?.value || "",
+        qty: Number(document.getElementById(`slot-qty-${idx}`)?.value || 1),
+      }));
       renderSelectors(current);
-      renderBuildPreview();
+      calculateAll();
+    });
+  });
+
+  selectorsEl.querySelectorAll('input[type="number"]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      if (!inp.value || Number(inp.value) < 1) inp.value = 1;
+      calculateAll();
     });
   });
 }
@@ -203,6 +224,7 @@ function renderBuildPreview() {
         <span class="badge">${food.duration_s}s</span>
       </div>
       <div class="small-muted">Overall ${fmtMaybe(food.scores.overall)} • Efficiency ${fmtMaybe(food.scores.efficiency, 2)}</div>
+      <div class="recipe-qty">Craft quantity: x${fmtMaybe(food.craftQty)}</div>
       ${food.notes ? `<div class="small-muted" style="margin-top:8px">${food.notes}</div>` : ""}
     </article>
   `).join("");
@@ -377,12 +399,12 @@ function calculateAll() {
 }
 
 function clearSelections() {
-  renderSelectors(["", "", "", "", ""]);
+  renderSelectors([{name:'',qty:1},{name:'',qty:1},{name:'',qty:1},{name:'',qty:1},{name:'',qty:1}]);
   calculateAll();
 }
 
 function applyRandomTopBuild() {
-  const picks = state.data.meta.top_overall.slice(0, 5).map(x => x.name);
+  const picks = state.data.meta.top_overall.slice(0, 5).map(x => ({ name: x.name, qty: 1 }));
   renderSelectors(picks);
   calculateAll();
 }
@@ -423,26 +445,32 @@ async function init() {
   state.foods = state.data.foods || [];
 
   document.getElementById("footerMeta").textContent =
-    `${state.data.meta.total_recipes} recipes • ${state.data.meta.total_ingredient_rows} ingredient rows`;
+    `${state.data.meta.total_recipes} recipes • ${state.data.meta.total_ingredient_rows} ingredient rows • Maintained by fernandobacate`;
 
   renderKPIs();
   renderFilters();
   renderSelectors([
-    state.data.meta.top_overall?.[0]?.name || "",
-    state.data.meta.top_overall?.[1]?.name || "",
-    state.data.meta.top_overall?.[2]?.name || "",
-    state.data.meta.top_overall?.[3]?.name || "",
-    state.data.meta.top_overall?.[4]?.name || "",
+    { name: state.data.meta.top_overall?.[0]?.name || "", qty: 1 },
+    { name: state.data.meta.top_overall?.[1]?.name || "", qty: 1 },
+    { name: state.data.meta.top_overall?.[2]?.name || "", qty: 1 },
+    { name: state.data.meta.top_overall?.[3]?.name || "", qty: 1 },
+    { name: state.data.meta.top_overall?.[4]?.name || "", qty: 1 },
   ]);
   calculateAll();
 
   benchFilterEl.addEventListener("change", () => {
-    const current = Array.from({ length: 5 }, (_, idx) => document.getElementById(`slot-${idx}`)?.value || "");
+    const current = Array.from({ length: 5 }, (_, idx) => ({
+      name: document.getElementById(`slot-${idx}`)?.value || "",
+      qty: Number(document.getElementById(`slot-qty-${idx}`)?.value || 1),
+    }));
     renderSelectors(current);
     calculateAll();
   });
   sortFoodsEl.addEventListener("change", () => {
-    const current = Array.from({ length: 5 }, (_, idx) => document.getElementById(`slot-${idx}`)?.value || "");
+    const current = Array.from({ length: 5 }, (_, idx) => ({
+      name: document.getElementById(`slot-${idx}`)?.value || "",
+      qty: Number(document.getElementById(`slot-qty-${idx}`)?.value || 1),
+    }));
     renderSelectors(current);
     calculateAll();
   });
