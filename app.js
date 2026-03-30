@@ -319,16 +319,19 @@ function renderRankings() {
 function buildSummaryText(selectedFoods) {
   const totals = Object.fromEntries(BUFF_DIMS.map(([key]) => [key, 0]));
   selectedFoods.forEach(food => BUFF_DIMS.forEach(([key]) => totals[key] += Number(food.scores?.[key] || 0)));
-  const archetypes = [...BUFF_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).slice(0, 3).map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
+  const archetypes = [...BUFF_DIMS]
+    .sort((a, b) => totals[b[0]] - totals[a[0]])
+    .slice(0, 3)
+    .map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
+
   return [
     `Icarus Food Calculator — Build Summary`,
     `Created by fernandobacate`,
     "",
     ...selectedFoods.map((food, idx) => `${idx + 1}. ${food.name} x${fmtMaybe(food.craftQty)} — ${food.bench} — Overall ${fmtMaybe(food.scores?.overall)}`),
     "",
-    `Top dimensions: ${archetypes.join(' • ')}`,
-  ].join("
-");
+    `Top dimensions: ${archetypes.join(' • ')}`
+  ].join("\n");
 }
 
 function shoppingText(selectedFoods) {
@@ -337,9 +340,8 @@ function shoppingText(selectedFoods) {
     `Icarus Food Calculator — Shopping List`,
     `Created by fernandobacate`,
     "",
-    ...rows.map(row => `- ${row.name}: ${fmtMaybe(row.qty)} ${row.unit || 'item'}`),
-  ].join("
-");
+    ...rows.map(row => `- ${row.name}: ${fmtMaybe(row.qty)} ${row.unit || 'item'}`)
+  ].join("\n");
 }
 
 async function copyText(text, successLabel, fallbackLabel) {
@@ -347,9 +349,7 @@ async function copyText(text, successLabel, fallbackLabel) {
     await navigator.clipboard.writeText(text);
     successLabel();
   } catch {
-    alert(fallbackLabel + "
-
-" + text);
+    alert(fallbackLabel + "\n\n" + text);
   }
 }
 
