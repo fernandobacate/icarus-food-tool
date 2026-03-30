@@ -1,1 +1,32 @@
-
+[
+  {
+    "name": "Banana Bread",
+    "buffs": {
+      "max_stamina": 200,
+      "stamina_regen_pct": 50,
+      "max_health": 200,
+      "health_regen_pct": 50,
+      "xp_gain_pct": 10
+    },
+    "ingredients": [
+      { "name": "Flour", "qty": 2 },
+      { "name": "Banana", "qty": 2 },
+      { "name": "Egg", "qty": 1 }
+    ]
+  },
+  {
+    "name": "Chocolate Cake",
+    "buffs": {
+      "max_stamina": 200,
+      "stamina_regen_pct": 200,
+      "max_health": 300,
+      "health_regen_pct": 200,
+      "xp_gain_pct": 25
+    },
+    "ingredients": [
+      { "name": "Cocoa", "qty": 2 },
+      { "name": "Flour", "qty": 2 },
+      { "name": "Egg", "qty": 2 }
+    ]
+  }
+]
