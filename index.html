@@ -4,30 +4,127 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Icarus Food Calculator</title>
+  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, and shopping list.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="wrap">
-    <h1>Icarus Food Calculator</h1>
-    <p>Pick up to 5 foods to view combined buffs and ingredients.</p>
+  <div class="bg-grid"></div>
+  <main class="shell">
+    <header class="hero">
+      <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
+      <h1>Icarus Food Calculator</h1>
+      <p class="hero-copy">
+        Build your perfect 5-food stack, compare top recipes, and generate a full shopping list from the complete dataset.
+      </p>
+      <div class="hero-actions">
+        <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
+        <button class="ghost-btn" id="copySummaryBtn">Copy summary</button>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpiGrid"></section>
+
+    <section class="panel controls-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Build Planner</h2>
+          <p>Pick up to 5 foods. Duplicate buff types are allowed here for theorycrafting, but the warning will show where a real in-game overlap may matter.</p>
+        </div>
+        <div class="control-row compact">
+          <label class="switch">
+            <input type="checkbox" id="hideZeroBuffs" checked>
+            <span>Hide zero rows</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="sortBuffs" checked>
+            <span>Sort buffs</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <label>
+            <span>Filter bench</span>
+            <select id="benchFilter"></select>
+          </label>
+          <label>
+            <span>Sort foods</span>
+            <select id="sortFoods">
+              <option value="name">Name (A–Z)</option>
+              <option value="overall">Overall score</option>
+              <option value="efficiency">Efficiency</option>
+              <option value="survival">Survival</option>
+              <option value="combat">Combat</option>
+              <option value="exploration">Exploration</option>
+              <option value="xp_support">XP / Support</option>
+              <option value="utility">Utility</option>
+            </select>
+          </label>
+        </div>
+        <div class="toolbar-right">
+          <button id="calculateBtn">Calculate</button>
+          <button class="secondary" id="clearBtn">Clear</button>
+        </div>
+      </div>
+
+      <div id="selectors" class="selectors"></div>
+      <div id="selectionCards" class="selection-cards"></div>
+      <div class="warning" id="buffWarning" hidden></div>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="panel">
+        <h2>Combined Buffs</h2>
+        <div id="buffChips" class="buff-chips"></div>
+        <div id="buffsTableWrap"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Build Score Snapshot</h2>
+        <div id="scoreCards" class="score-cards"></div>
+        <div id="buildInsights" class="insights"></div>
+      </section>
+    </div>
 
     <section class="panel">
-      <div id="selectors"></div>
-      <button id="calcBtn">Calculate</button>
-      <button id="clearBtn">Clear</button>
+      <div class="panel-header">
+        <div>
+          <h2>Shopping List</h2>
+          <p>Aggregated ingredients for the selected recipes. Quantities reflect exactly what you selected.</p>
+        </div>
+        <button class="secondary" id="copyShoppingBtn">Copy shopping list</button>
+      </div>
+      <div id="shoppingWrap"></div>
     </section>
 
     <section class="panel">
-      <h2>Combined Buffs</h2>
-      <div id="buffs"></div>
+      <div class="panel-header">
+        <div>
+          <h2>Recipe Rankings</h2>
+          <p>Use this to scout strong foods before building a combo.</p>
+        </div>
+        <label>
+          <span>Show top</span>
+          <select id="rankingLimit">
+            <option>10</option>
+            <option selected>20</option>
+            <option>30</option>
+            <option>50</option>
+          </select>
+        </label>
+      </div>
+      <div id="rankingsWrap"></div>
     </section>
 
-    <section class="panel">
-      <h2>Shopping List</h2>
-      <div id="shopping"></div>
-    </section>
+    <footer class="footer">
+      <span>Built from Fernando's Icarus food dataset.</span>
+      <span id="footerMeta"></span>
+    </footer>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>
