@@ -884,136 +884,199 @@ async function drawCategoryIconOrFallback(ctx, cat, x, y, size=34) {
     drawText(ctx, fallback, x + 9, y + 23, {font:'20px Inter, Arial, sans-serif', color:'#f2ddb0'});
   }
 }
-async function exportBuildAsPng() {
+async 
+function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
-  const selectedFoods = state.calculatedFoods;
-  const activeFoods = aggregateEffectFoods(selectedFoods);
-  const shopping = aggregateIngredients(selectedFoods).slice(0, 16);
-  const buffTotals = sumBuffs(activeFoods);
-  const categorized = {};
-  CATEGORY_ORDER.forEach(cat => categorized[cat] = []);
-  Object.entries(buffTotals).forEach(([label, value]) => {
-    const cat = categorizeBuffLabel(label);
-    if (!categorized[cat]) categorized[cat] = [];
-    categorized[cat].push({label, value});
-  });
-  const metrics = activeFoods.reduce((acc, food) => {
-    Object.entries(food.computedScores || {}).forEach(([k,v]) => { acc[k] = (acc[k] || 0) + Number(v || 0); });
-    return acc;
-  }, {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0});
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 1800; canvas.height = 1600;
-  const ctx = canvas.getContext('2d');
+  (async () => {
+    const selectedFoods = state.calculatedFoods;
+    const activeFoods = aggregateEffectFoods(selectedFoods);
+    const shopping = aggregateIngredients(selectedFoods).slice(0, 18);
+    const buffTotals = sumBuffs(activeFoods);
+    const grouped = {};
+    CATEGORY_ORDER.forEach(cat => grouped[cat] = []);
+    Object.entries(buffTotals).forEach(([label, value]) => {
+      const cat = categorizeBuffLabel(label);
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({ label, value });
+    });
 
-  // Background
-  ctx.fillStyle = '#07090f';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  const bgImg = await loadImageSafe('assets/bg/page-bg.jpg');
-  if (bgImg) {
-    ctx.globalAlpha = 0.22;
-    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-    ctx.globalAlpha = 1;
-  }
-  ctx.fillStyle = 'rgba(7,9,15,.84)';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+    const metrics = activeFoods.reduce((acc, food) => {
+      Object.entries(food.computedScores || {}).forEach(([k, v]) => {
+        acc[k] = (acc[k] || 0) + Number(v || 0);
+      });
+      return acc;
+    }, { survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0 });
 
-  // Hero card
-  fillRoundRect(ctx, 40, 36, 1720, 180, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
-  const heroImg = await loadImageSafe('assets/bg/hero.png');
-  if (heroImg) {
-    ctx.save();
-    roundRect(ctx, 40, 36, 1720, 180, 28);
-    ctx.clip();
-    ctx.globalAlpha = 0.32;
-    ctx.drawImage(heroImg, 40, 36, 1720, 180);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-  drawText(ctx, 'ICARUS • COMMUNITY TOOL', 70, 72, {font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39'});
-  drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
-  drawText(ctx, currentSettingsLabel(), 70, 170, {font:'22px Inter, Arial, sans-serif', color:'#e0c480'});
-  drawText(ctx, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, {font:'18px Inter, Arial, sans-serif', color:'#dfe4ea'});
+    const recipeRows = Math.min(selectedFoods.length, 6);
+    const recipeSectionH = 118 + recipeRows * 96 + 12;
 
-  // Left column build
-  fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  drawText(ctx, 'Selected Recipes', 70, 300, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, 70, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
-  let y = 380;
-  for (let i=0; i<selectedFoods.length; i++) {
-    const food = selectedFoods[i];
-    fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
-    await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
-    drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
-    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
-    const fam = effectFamily(food);
-    const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
-    const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
-    drawText(ctx, note, 650, y+50, {font:'18px Inter, Arial, sans-serif', color: active ? '#54d69a' : '#ffb5b5'});
-    y += 96;
-    if (y > 820) break;
-  }
+    const scoreSectionH = 290;
+    const shoppingRows = Math.min(shopping.length, 18);
+    const shoppingSectionH = 110 + shoppingRows * 44 + 24;
 
-  // Build score
-  fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
-  const scoreBoxes = [
-    ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
-    ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
-    ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
-  ];
-  let sx=88, sy=935;
-  scoreBoxes.forEach(async (item, idx) => {
-    const bw=180, bh=58;
-    fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
-    drawText(ctx, item[1], sx+48, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(item[2]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
-    sx += bw + 12;
-    if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
-  });
+    let buffsSectionH = 110;
+    const visibleCategories = [];
+    CATEGORY_ORDER.forEach(cat => {
+      const list = (grouped[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value) === 0));
+      if (!list.length) return;
+      visibleCategories.push([cat, list]);
+      const lines = Math.min(list.length, 8);
+      buffsSectionH += 92 + lines * 42;
+    });
+    buffsSectionH += 20;
 
-  // Shopping list
-  fillRoundRect(ctx, 65, 1105, 810, 430, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Shopping List', 88, 1148, {font:'bold 34px Inter, Arial, sans-serif'});
-  let iy = 1188;
-  for (const row of shopping) {
-    await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
-    drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
-    drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 660, iy+13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
-    iy += 44;
-    if (iy > 1510) break;
-  }
+    const leftColumnH = recipeSectionH + 24 + scoreSectionH + 24 + shoppingSectionH;
+    const rightColumnH = buffsSectionH;
+    const heroH = 190;
+    const contentTop = 250;
+    const contentBottom = Math.max(leftColumnH, rightColumnH);
+    const canvasWidth = 1800;
+    const canvasHeight = Math.max(1550, contentTop + contentBottom + 60);
 
-  // Right column buffs
-  fillRoundRect(ctx, 930, 250, 830, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  drawText(ctx, 'Combined Buffs', 960, 300, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(ctx, 'Grouped by gameplay category for faster reading.', 960, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d');
 
-  let cy = 380;
-  for (const cat of CATEGORY_ORDER) {
-    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
-    if (!list.length) continue;
-    fillRoundRect(ctx, 955, cy, 780, 150, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-    await drawCategoryIconOrFallback(ctx, cat, 978, cy+8, 30);
-    drawText(ctx, CATEGORY_LABELS[cat], 1018, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
-    let chipX = 978, chipY = cy+54;
-    for (const row of list.slice(0, 6)) {
-      const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
-      const w = drawChip(ctx, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
-      chipX += w + 8;
-      if (chipX > 1600) { chipX = 978; chipY += 46; }
+    // background
+    ctx.fillStyle = '#07090f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const bgImg = await loadImageSafe('assets/bg/page-bg.jpg');
+    if (bgImg) {
+      ctx.globalAlpha = 0.20;
+      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
     }
-    cy += 166;
-    if (cy > 1380) break;
-  }
+    ctx.fillStyle = 'rgba(7,9,15,.82)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, 1532, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+    // hero
+    fillRoundRect(ctx, 40, 36, 1720, heroH, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
+    const heroImg = await loadImageSafe('assets/bg/hero.png');
+    if (heroImg) {
+      ctx.save();
+      roundRect(ctx, 40, 36, 1720, heroH, 28);
+      ctx.clip();
+      ctx.globalAlpha = 0.30;
+      ctx.drawImage(heroImg, 40, 36, 1720, heroH);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+    drawText(ctx, 'ICARUS • COMMUNITY TOOL', 70, 72, { font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39' });
+    drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, { font:'bold 54px Inter, Arial, sans-serif' });
+    drawText(ctx, currentSettingsLabel(), 70, 170, { font:'22px Inter, Arial, sans-serif', color:'#e0c480' });
+    drawText(ctx, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, { font:'18px Inter, Arial, sans-serif', color:'#dfe4ea' });
 
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL('image/png');
-  link.download = 'icarus-build.png';
-  link.click();
+    // columns
+    const leftX = 40, leftW = 860;
+    const rightX = 930, rightW = 830;
+    let leftY = contentTop;
+    let rightY = contentTop;
+
+    // Selected recipes
+    fillRoundRect(ctx, leftX, leftY, leftW, recipeSectionH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+    drawText(ctx, 'Selected Recipes', leftX + 30, leftY + 50, { font:'bold 40px Inter, Arial, sans-serif' });
+    drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, leftX + 30, leftY + 86, { font:'22px Inter, Arial, sans-serif', color:'#aab3c4' });
+
+    let ry = leftY + 118;
+    for (let i = 0; i < recipeRows; i++) {
+      const food = selectedFoods[i];
+      fillRoundRect(ctx, leftX + 25, ry, leftW - 50, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
+      await drawIconOrFallback(ctx, food.name, 'recipes', leftX + 42, ry + 20, 42);
+      drawText(ctx, `${i + 1}. ${food.name}`, leftX + 98, ry + 36, { font:'bold 28px Inter, Arial, sans-serif' });
+      drawText(ctx, `${food.bench} • x${food.craftQty} craft`, leftX + 98, ry + 64, { font:'20px Inter, Arial, sans-serif', color:'#aab3c4' });
+      const fam = effectFamily(food);
+      const active = activeFoods.find(f => effectFamily(f) === fam && f.name === food.name);
+      drawText(ctx, active ? 'Active effect' : 'Refresh / duplicate', leftX + leftW - 205, ry + 50, {
+        font:'18px Inter, Arial, sans-serif',
+        color: active ? '#54d69a' : '#ffb5b5'
+      });
+      ry += 96;
+    }
+
+    // Score section
+    leftY += recipeSectionH + 24;
+    fillRoundRect(ctx, leftX, leftY, leftW, scoreSectionH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+    drawText(ctx, 'Build Score Snapshot', leftX + 30, leftY + 48, { font:'bold 38px Inter, Arial, sans-serif' });
+
+    const scoreItems = [
+      ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee],
+      ['ranged','Ranged', metrics.ranged], ['exploration','Exploration', metrics.exploration],
+      ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
+      ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
+    ];
+
+    let sx = leftX + 30, sy = leftY + 76;
+    const boxW = 185, boxH = 76;
+    for (let i = 0; i < scoreItems.length; i++) {
+      const [key, label, value] = scoreItems[i];
+      fillRoundRect(ctx, sx, sy, boxW, boxH, 18, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
+      await drawCategoryIconOrFallback(ctx, key, sx + 10, sy + 10, 30);
+      drawText(ctx, label, sx + 50, sy + 26, { font:'17px Inter, Arial, sans-serif', color:'#aab3c4' });
+      drawText(ctx, fmtMaybe(value), sx + 14, sy + 58, { font:'bold 30px Inter, Arial, sans-serif' });
+      sx += boxW + 12;
+      if ((i + 1) % 4 === 0) { sx = leftX + 30; sy += boxH + 12; }
+    }
+
+    // Shopping list
+    leftY += scoreSectionH + 24;
+    fillRoundRect(ctx, leftX, leftY, leftW, shoppingSectionH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+    drawText(ctx, 'Shopping List', leftX + 30, leftY + 48, { font:'bold 38px Inter, Arial, sans-serif' });
+    drawText(ctx, 'Top ingredients required for the selected crafts.', leftX + 30, leftY + 80, { font:'18px Inter, Arial, sans-serif', color:'#aab3c4' });
+
+    let iy = leftY + 118;
+    for (const row of shopping.slice(0, shoppingRows)) {
+      await drawIconOrFallback(ctx, row.name, 'ingredients', leftX + 30, iy - 10, 34);
+      drawText(ctx, row.name, leftX + 76, iy + 13, { font:'24px Inter, Arial, sans-serif' });
+      drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, leftX + leftW - 210, iy + 13, { font:'24px Inter, Arial, sans-serif', color:'#f0ddb0' });
+      iy += 44;
+    }
+
+    // Combined buffs section
+    fillRoundRect(ctx, rightX, rightY, rightW, rightColumnH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+    drawText(ctx, 'Combined Buffs', rightX + 30, rightY + 50, { font:'bold 40px Inter, Arial, sans-serif' });
+    drawText(ctx, 'Grouped by gameplay category for faster reading.', rightX + 30, rightY + 86, { font:'22px Inter, Arial, sans-serif', color:'#aab3c4' });
+
+    let cy = rightY + 118;
+    for (const [cat, listRaw] of visibleCategories) {
+      const list = listRaw.slice(0, 8);
+      const cardH = 72 + list.length * 42;
+      fillRoundRect(ctx, rightX + 25, cy, rightW - 50, cardH, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+      await drawCategoryIconOrFallback(ctx, cat, rightX + 48, cy + 10, 30);
+      drawText(ctx, CATEGORY_LABELS[cat], rightX + 88, cy + 34, { font:'bold 28px Inter, Arial, sans-serif', color: categoryAccent(cat) });
+
+      let chipX = rightX + 48, chipY = cy + 52;
+      for (const row of list.slice(0, 4)) {
+        const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
+        const w = drawChip(ctx, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
+        chipX += w + 8;
+        if (chipX > rightX + rightW - 200) { chipX = rightX + 48; chipY += 44; }
+      }
+
+      let tableY = chipY + 44;
+      fillRoundRect(ctx, rightX + 48, tableY, rightW - 96, 38 + list.length * 34, 14, 'rgba(255,255,255,.02)', 'rgba(255,255,255,.06)');
+      drawText(ctx, 'Buff', rightX + 68, tableY + 25, { font:'bold 18px Inter, Arial, sans-serif', color:'#dfe4ea' });
+      drawText(ctx, 'Total', rightX + rightW - 125, tableY + 25, { font:'bold 18px Inter, Arial, sans-serif', color:'#dfe4ea' });
+      let rowY = tableY + 54;
+      list.forEach(row => {
+        const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
+        drawText(ctx, row.label, rightX + 68, rowY, { font:'18px Inter, Arial, sans-serif' });
+        const metricsText = valText;
+        drawText(ctx, metricsText, rightX + rightW - 125 - ctx.measureText(metricsText).width, rowY, { font:'18px Inter, Arial, sans-serif' });
+        rowY += 34;
+      });
+
+      cy += cardH + 16;
+    }
+
+    drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', rightX + 170, canvas.height - 28, { font:'20px Inter, Arial, sans-serif', color:'#aab3c4' });
+
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = 'icarus-build.png';
+    link.click();
+  })();
 }
 
 // ---------- Clear / random / init ----------
