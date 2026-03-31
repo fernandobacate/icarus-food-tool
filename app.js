@@ -37,6 +37,7 @@ const els = {
   copyLinkBtn: document.getElementById("copyLinkBtn"),
   exportPngBtn: document.getElementById("exportPngBtn"),
   carnivoreToggle: document.getElementById("carnivoreToggle"),
+  cullinexToggle: document.getElementById("cullinexToggle"),
   strictMode: document.getElementById("strictMode"),
   ignoreConsumeStats: document.getElementById("ignoreConsumeStats"),
   generatorArchetype: document.getElementById("generatorArchetype"),
@@ -107,8 +108,17 @@ function effectFamily(food) {
 function isCarnivoreOn() {
   return els.carnivoreToggle.value === "on";
 }
+function isCullinexOn() {
+  return els.cullinexToggle?.value === "on";
+}
+function cullinexAppliesToFood(food) {
+  return !!food?.bench && ["Kitchen Bench", "Electric Stove", "Smoker"].includes(food.bench);
+}
+function isConsumeStatLabel(label) {
+  return /Food on consume|Water on consume/i.test(label);
+}
 function currentSettingsLabel() {
-  return `Carnivore ${isCarnivoreOn() ? 'ON' : 'OFF'} • ${els.ignoreConsumeStats.checked ? 'Consume stats ignored' : 'Consume stats included'} • ${els.strictMode.checked ? 'Strict in-game mode' : 'Free theorycraft mode'}`;
+  return `Carnivore ${isCarnivoreOn() ? 'ON' : 'OFF'} • Cullinex ${isCullinexOn() ? 'ON' : 'OFF'} • ${els.ignoreConsumeStats.checked ? 'Consume stats ignored' : 'Consume stats included'} • ${els.strictMode.checked ? 'Strict in-game mode' : 'Free theorycraft mode'}`;
 }
 function selectedSlotCount() {
   const raw = els.stomachSlots?.value ?? els.stomachSlots?.selectedOptions?.[0]?.value ?? "";
@@ -121,7 +131,7 @@ function effectivePlannerSlotCount() {
 
 // ---------- Score mapping ----------
 function consumeIgnored(label) {
-  return els.ignoreConsumeStats.checked && /Food on consume|Water on consume/i.test(label);
+  return els.ignoreConsumeStats.checked && isConsumeStatLabel(label);
 }
 function scoreBucketsFromBuffs(buffEntries) {
   const totals = {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0};
@@ -159,14 +169,23 @@ function scoreBucketsFromBuffs(buffEntries) {
   return {...totals, overall};
 }
 function adjustedFood(food) {
-  const smokerBoost = isCarnivoreOn() && food.bench === "Smoker" ? 1.3 : 1;
-  const buffEntries = Object.values(food.buffs || {}).map(meta => [meta.label, Number(meta.value || 0) * smokerBoost]);
+  const carnivoreBoost = isCarnivoreOn() && food.bench === "Smoker" ? 1.3 : 1;
+  const cullinexEnabled = isCullinexOn() && cullinexAppliesToFood(food);
+  const cullinexBuffBoost = cullinexEnabled ? 1.25 : 1;
+  const buffEntries = Object.values(food.buffs || {}).map(meta => {
+    const label = meta.label;
+    let value = Number(meta.value || 0) * carnivoreBoost;
+    if (cullinexEnabled && !isConsumeStatLabel(label)) value *= cullinexBuffBoost;
+    return [label, value];
+  });
   const buckets = scoreBucketsFromBuffs(buffEntries);
   const complexity = Math.max(1, Number(food.ingredient_count || 1));
   const efficiency = buckets.overall / (complexity + 1);
+  const adjustedDuration = Number(food.duration_s || 0) * (cullinexEnabled ? 1.25 : 1);
   return {
     ...food,
     adjustedBuffEntries: buffEntries,
+    adjustedDuration_s: adjustedDuration,
     computedScores: {...buckets, efficiency},
   };
 }
@@ -219,7 +238,7 @@ function applyFoodFilter() {
 }
 function presetsForFoods() {
   const foods = allAdjustedFoods();
-  const topBy = (key, limit = 5) => [...foods].sort((a,b)=>(targetScore(b,key)||0)-(targetScore(a,key)||0)).slice(0,limit).map(f=>f.name);
+  const topBy = (key, limit = selectedSlotCount() || 5) => [...foods].sort((a,b)=>(targetScore(b,key)||0)-(targetScore(a,key)||0)).slice(0,limit).map(f=>f.name);
   return [
     { id:"allround", label:"All-round", names: topBy("allround") },
     { id:"survival", label:"Survival Tank", names: topBy("survival") },
@@ -239,11 +258,13 @@ function renderPresets() {
       if (!preset) return;
       state.currentPreset = preset.id;
       clearPlanner(false);
-      preset.names.forEach((name, i) => {
-        if (i<5) {
-          document.getElementById(`slot-${i}`).value = name;
-          document.getElementById(`slot-qty-${i}`).value = 1;
-        }
+      const slotCap = selectedSlotCount() || preset.names.length;
+      preset.names.slice(0, slotCap).forEach((name, i) => {
+        const slot = document.getElementById(`slot-${i}`);
+        const qty = document.getElementById(`slot-qty-${i}`);
+        if (!slot || !qty) return;
+        slot.value = name;
+        qty.value = 1;
       });
       renderPresets();
     });
@@ -285,6 +306,16 @@ function renderSelectors(preserve = []) {
   }
   for (let i=0;i<count;i++) setupAutocomplete(i);
 }
+function closeAllAutocompletes(exceptIndex = null) {
+  document.querySelectorAll('.auto-list').forEach(list => list.classList.add('hidden'));
+  document.querySelectorAll('.slot.open').forEach(wrap => {
+    const match = wrap.id.match(/slot-wrap-(\d+)/);
+    const idx = match ? Number(match[1]) : null;
+    if (exceptIndex == null || idx !== exceptIndex) wrap.classList.remove('open');
+  });
+  if (exceptIndex == null || state.activeAutocomplete !== exceptIndex) state.activeAutocomplete = null;
+}
+
 function setupAutocomplete(index) {
   const input = document.getElementById(`slot-${index}`);
   const wrap = document.getElementById(`slot-wrap-${index}`);
@@ -292,7 +323,7 @@ function setupAutocomplete(index) {
   let activeIndex = -1;
 
   function openWith(items) {
-    document.querySelectorAll('.slot.open').forEach(el => { if (el !== wrap) el.classList.remove('open'); });
+    closeAllAutocompletes(index);
     wrap.classList.add('open');
     state.activeAutocomplete = index;
     list.innerHTML = items.map((food, idx)=>`
@@ -357,9 +388,6 @@ function setupAutocomplete(index) {
         close();
       }
     } else if (e.key === 'Escape') close();
-  });
-  document.addEventListener('click', (e) => {
-    if (!wrap.contains(e.target)) close();
   });
 }
 
@@ -479,7 +507,7 @@ function renderSelectedCards(selectedFoods, activeFoods) {
           <div class="meta-row">
             <span class="badge tier-${food.tier || 'D'}">${food.tier || '—'} Tier</span>
             <span class="badge">${food.bench}</span>
-            <span class="badge">${fmtMaybe(food.duration_s)}s</span>
+            <span class="badge">${fmtMaybe(food.adjustedDuration_s ?? food.duration_s)}s</span>
           </div>
         </div>
       </div>
@@ -774,6 +802,7 @@ function encodeBuildState() {
   const selected = preserveDraft().filter(x => x.name);
   const payload = {
     c: els.carnivoreToggle.value,
+    cb: els.cullinexToggle?.value || 'off',
     s: els.strictMode.checked ? 1 : 0,
     i: els.ignoreConsumeStats.checked ? 1 : 0,
     slots: selectedSlotCount(),
@@ -789,6 +818,7 @@ function decodeBuildState(str) {
 function applyBuildState(payload) {
   if (!payload) return;
   if (payload.c) els.carnivoreToggle.value = payload.c;
+  if (payload.cb && els.cullinexToggle) els.cullinexToggle.value = payload.cb;
   if (payload.slots) els.stomachSlots.value = String(payload.slots);
   els.strictMode.checked = !!payload.s;
   els.ignoreConsumeStats.checked = !!payload.i;
@@ -958,7 +988,7 @@ async function exportBuildAsPng() {
     fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
     await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
     drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
-    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, `${food.bench} • ${fmtMaybe(food.adjustedDuration_s ?? food.duration_s)}s • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
     const fam = effectFamily(food);
     const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
     const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
@@ -1109,6 +1139,10 @@ function syncPlannerState() {
   renderGenerator();
 }
 
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.slot')) closeAllAutocompletes();
+});
+
 els.benchFilter.addEventListener('change', () => renderSelectors(preserveDraft()));
 els.sortFoods.addEventListener('change', () => renderSelectors(preserveDraft()));
 els.rankingLimit.addEventListener('change', renderRankings);
@@ -1116,6 +1150,7 @@ els.hideZeroBuffs.addEventListener('change', () => state.calculated && calculate
 els.sortBuffs.addEventListener('change', () => state.calculated && calculateAll());
 els.stomachSlots.addEventListener('change', () => { renderFilters(); clearPlanner(false); renderGenerator(); renderPresets(); renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1}))); });
 els.carnivoreToggle.addEventListener('change', refreshDataViews);
+els.cullinexToggle?.addEventListener('change', refreshDataViews);
 els.ignoreConsumeStats.addEventListener('change', refreshDataViews);
 els.strictMode.addEventListener('change', () => state.calculated && calculateAll());
 els.calculateBtn.addEventListener('click', calculateAll);

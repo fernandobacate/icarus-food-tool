@@ -1,4 +1,4 @@
-# Icarus Food Calculator V12
+# Icarus Food Calculator V23
 
 Static GitHub Pages tool for the Icarus community.
 
@@ -10,12 +10,19 @@ Static GitHub Pages tool for the Icarus community.
   - Budget / early game
   - Practical / mid game
   - Premium / endgame
+- stomach-slot selector (3, 4, 5, or 6)
 - Carnivore toggle
+- Cullinex Backpack toggle
 - strict in-game mode
 - grouped combined buffs
 - shopping list
 - shareable build links
 - PNG export
+
+## V23 notes
+- Added Cullinex Backpack support. When enabled, cooked-food modifiers gain +25% effectiveness and recipe duration is increased by +25% for supported cooked foods.
+- Quick presets now respect the current stomach-slot count.
+- Share links preserve the Cullinex state as well.
 
 ## Assets
 Place your images here:
@@ -28,13 +35,6 @@ Place your images here:
 Recommended icon size: `128x128` PNG with transparent background.
 Recommended hero size: `1920x720`
 Recommended page background size: `1920x1080`
-
-
-V13 notes:
-- Choose stomach slots first (3, 4, 5, or 6).
-- Build generator and planner respect the selected slot cap.
-- Export build now includes the shopping list in the generated PNG.
-
 
 ## Optional category icon support
 Drop PNG files into `assets/categories/` using these names:

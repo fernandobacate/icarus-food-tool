@@ -18,7 +18,7 @@
     <header class="hero">
       <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
       <h1>Icarus Food Calculator</h1>
-      <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
+      <p class="hero-copy">Build your ideal Icarus food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
       <div class="hero-actions">
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
@@ -61,6 +61,13 @@
             <select id="carnivoreToggle">
               <option value="off" selected>Off</option>
               <option value="on">On</option>
+            </select>
+          </label>
+          <label>
+            <span>Cullinex Backpack</span>
+            <select id="cullinexToggle">
+              <option value="off" selected>No</option>
+              <option value="on">Yes</option>
             </select>
           </label>
           <label>
@@ -184,7 +191,7 @@
       <div class="panel-header">
         <div>
           <h2>Recipe Rankings</h2>
-          <p>Scout strong recipes before building a combo. Rankings come from the current scoring model and your Carnivore setting.</p>
+          <p>Scout strong recipes before building a combo. Rankings come from the current scoring model and your Carnivore / Cullinex settings.</p>
         </div>
         <label>
           <span>Show top</span>
