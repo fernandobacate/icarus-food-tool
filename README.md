@@ -1,29 +1,34 @@
-# Icarus Food Calculator
+# Icarus Food Calculator — V5
 
 Static GitHub Pages tool for the Icarus community.
 
-## Features
-- searchable 5-slot build planner
-- craft quantity per slot
-- calculate-on-demand flow
-- top recipe rankings
-- build presets
-- copy-ready summary and shopping list
-- optional PNG icon support
+## New in V5
+- custom autocomplete with keyboard navigation
+- strict in-game mode for duplicate buff prevention
+- shareable build links via URL
+- embed mode with `?embed=1`
+- export current build as PNG image
+- generate optimal build button
+- optional hero background image support
+- optional PNG icon support for recipes and ingredients
 
-## Optional icon support
-Drop PNG files into these folders:
+## Optional assets
+Drop your files into:
 
 - `assets/recipes/`
 - `assets/ingredients/`
+- `assets/bg/hero.jpg`
 
-Use slug-style filenames, for example:
+Use slug filenames, for example:
 
 - `assets/recipes/chocolate-cake.png`
 - `assets/ingredients/sugar-cubes.png`
-- `assets/ingredients/raw-chicken.png`
+- `assets/bg/hero.jpg`
 
-If no icon exists, the tool falls back to initials automatically.
+Recommended icon format:
+- PNG
+- transparent background
+- 64x64 or 128x128
 
 ## Credits
 Created and maintained by **fernandobacate**.

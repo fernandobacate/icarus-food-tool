@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Icarus Food Calculator</title>
-  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, shopping list, searchable planner slots, build presets, and export-ready summaries.">
+  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, shopping list, presets, strict mode, shareable links, export image, and wiki-ready embed mode.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,14 +13,17 @@
 <body>
   <div class="bg-grid"></div>
   <main class="shell">
-    <header class="hero">
+    <header class="hero" id="heroSection">
       <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
       <h1>Icarus Food Calculator</h1>
       <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
       <div class="hero-actions">
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
+        <button class="ghost-btn" id="optimalBuildBtn">Generate optimal build</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
+        <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
+        <button class="ghost-btn" id="exportImageBtn">Export build image</button>
       </div>
     </header>
 
@@ -30,11 +33,12 @@
       <div class="panel-header">
         <div>
           <h2>Build Planner</h2>
-          <p>Pick up to 5 foods, set craft quantities, search recipes quickly, and calculate the final result only when you are ready. Duplicate buff types are allowed here for theorycrafting, and the warning will highlight where real in-game overlap may matter.</p>
+          <p>Pick up to 5 foods, set craft quantities, search recipes quickly, and calculate the final result only when you are ready. Duplicate buff types are allowed for theorycrafting, or can be blocked with Strict mode to better reflect in-game uniqueness.</p>
         </div>
         <div class="toggles">
           <label class="switch"><input type="checkbox" id="hideZeroBuffs" checked><span>Hide zero rows</span></label>
           <label class="switch"><input type="checkbox" id="sortBuffs" checked><span>Sort buffs</span></label>
+          <label class="switch"><input type="checkbox" id="strictMode"><span>Strict in-game</span></label>
         </div>
       </div>
 
@@ -70,7 +74,7 @@
       </div>
 
       <div id="selectors" class="selectors"></div>
-      <div class="hint-row">Tip: type part of a recipe name in any slot to get browser suggestions. Icons can be enabled later by dropping PNG files into <code>assets/recipes</code> and <code>assets/ingredients</code>.</div>
+      <div class="hint-row">Tip: start typing to get a custom autocomplete list. Icons can be enabled by dropping PNG files into <code>assets/recipes</code> and <code>assets/ingredients</code>. Add a hero image at <code>assets/bg/hero.jpg</code>.</div>
     </section>
 
     <section id="resultsArea" class="results-stack hidden">
@@ -129,7 +133,7 @@
       <div id="rankingsWrap"></div>
     </section>
 
-    <footer class="footer">
+    <footer class="footer footer-credits">
       <div class="credits-block">
         <div class="credits-title">Credits</div>
         <div class="credits-line">Created and maintained by <strong>fernandobacate</strong> — beginner coding enthusiast, survival game lover, and former ARK addict building tools for the Icarus community.</div>
@@ -137,6 +141,7 @@
       <span id="footerMeta"></span>
     </footer>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

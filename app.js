@@ -1,4 +1,3 @@
-
 const state = {
   data: null,
   foods: [],
@@ -6,7 +5,12 @@ const state = {
   calculated: false,
   calculatedFoods: [],
   currentPreset: null,
+  autoSelectOnPreset: false,
 };
+
+const params = new URLSearchParams(window.location.search);
+const isEmbed = params.has("embed");
+if (isEmbed) document.body.classList.add("embed-mode");
 
 const kpiGridEl = document.getElementById("kpiGrid");
 const selectorsEl = document.getElementById("selectors");
@@ -27,11 +31,15 @@ const sortFoodsEl = document.getElementById("sortFoods");
 const rankingLimitEl = document.getElementById("rankingLimit");
 const hideZeroBuffsEl = document.getElementById("hideZeroBuffs");
 const sortBuffsEl = document.getElementById("sortBuffs");
+const strictModeEl = document.getElementById("strictMode");
 const calculateBtn = document.getElementById("calculateBtn");
 const clearBtn = document.getElementById("clearBtn");
 const randomBuildBtn = document.getElementById("randomBuildBtn");
+const optimalBuildBtn = document.getElementById("optimalBuildBtn");
 const copySummaryBtn = document.getElementById("copySummaryBtn");
 const copyShoppingBtn = document.getElementById("copyShoppingBtn");
+const copyLinkBtn = document.getElementById("copyLinkBtn");
+const exportImageBtn = document.getElementById("exportImageBtn");
 
 const BUFF_DIMS = [
   ["survival", "Survival"],
@@ -78,6 +86,24 @@ function iconMarkup(name, type = "recipes", className = "icon-wrap") {
       <span class="icon-fallback">${initials(name)}</span>
     </div>
   `;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function highlightMatch(name, query) {
+  if (!query) return escapeHtml(name);
+  const lower = name.toLowerCase();
+  const start = lower.indexOf(query.toLowerCase());
+  if (start === -1) return escapeHtml(name);
+  const end = start + query.length;
+  return `${escapeHtml(name.slice(0,start))}<span class="match">${escapeHtml(name.slice(start,end))}</span>${escapeHtml(name.slice(end))}`;
 }
 
 function bySelectedSort(a, b, mode) {
@@ -178,11 +204,6 @@ function applyFoodFilter() {
   state.filteredFoods = state.foods.filter(f => bench === "All" || f.bench === bench).sort((a, b) => bySelectedSort(a, b, mode));
 }
 
-function dataListMarkup(slotIndex) {
-  const options = state.filteredFoods.map(food => `<option value="${food.name}"></option>`).join("");
-  return `<datalist id="foods-list-${slotIndex}">${options}</datalist>`;
-}
-
 function renderSelectors(preserve = []) {
   applyFoodFilter();
   selectorsEl.innerHTML = "";
@@ -194,9 +215,9 @@ function renderSelectors(preserve = []) {
       <div class="slot">
         <div class="slot-header"><strong>Slot ${i + 1}</strong><span>${current ? "Draft selected" : "Empty"}</span></div>
         <div class="slot-controls">
-          <div>
-            <input class="wide-input" id="slot-${i}" list="foods-list-${i}" placeholder="Type to search a recipe..." value="${current.replace(/"/g, '&quot;')}">
-            ${dataListMarkup(i)}
+          <div class="search-wrap">
+            <input autocomplete="off" class="wide-input food-input" data-index="${i}" id="slot-${i}" placeholder="Type to search a recipe..." value="${escapeHtml(current)}">
+            <div class="autocomplete-list hidden" id="slot-list-${i}"></div>
           </div>
           <label>
             <span>Craft qty</span>
@@ -206,31 +227,126 @@ function renderSelectors(preserve = []) {
       </div>
     `);
   }
+  setupAutocompleteAll();
+}
+
+function setupAutocompleteAll() {
+  document.querySelectorAll('.food-input').forEach(input => setupAutocomplete(input));
+}
+
+function setupAutocomplete(input) {
+  const index = Number(input.dataset.index);
+  const listEl = document.getElementById(`slot-list-${index}`);
+  let activeIndex = -1;
+
+  function closeList() {
+    listEl.classList.add('hidden');
+    listEl.innerHTML = '';
+    activeIndex = -1;
+  }
+
+  function openList(matches, query) {
+    if (!matches.length) {
+      closeList();
+      return;
+    }
+    listEl.classList.remove('hidden');
+    listEl.innerHTML = matches.map((food, idx) => `
+      <div class="autocomplete-item ${idx === 0 ? 'active' : ''}" data-name="${escapeHtml(food.name)}">
+        ${iconMarkup(food.name, 'recipes', 'ingredient-mini')}
+        <div>
+          <div class="item-name">${highlightMatch(food.name, query)}</div>
+          <div class="item-meta">
+            <span class="autocomplete-bench">${food.bench}</span>
+            <span class="badge tier-${food.tier || 'unknown'}">${food.tier || '—'} Tier</span>
+            <span class="autocomplete-bench">Overall ${fmtMaybe(food.scores?.overall)}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    activeIndex = 0;
+    listEl.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', evt => {
+        evt.preventDefault();
+        input.value = item.dataset.name;
+        closeList();
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    applyFoodFilter();
+    const query = input.value.trim().toLowerCase();
+    if (!query) {
+      closeList();
+      return;
+    }
+    const matches = state.filteredFoods.filter(food => food.name.toLowerCase().includes(query)).slice(0, 8);
+    openList(matches, query);
+  });
+
+  input.addEventListener('focus', () => {
+    const query = input.value.trim().toLowerCase();
+    if (!query) return;
+    const matches = state.filteredFoods.filter(food => food.name.toLowerCase().includes(query)).slice(0, 8);
+    openList(matches, query);
+  });
+
+  input.addEventListener('keydown', evt => {
+    const items = [...listEl.querySelectorAll('.autocomplete-item')];
+    if (listEl.classList.contains('hidden') || !items.length) return;
+    if (evt.key === 'ArrowDown') {
+      evt.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+    } else if (evt.key === 'ArrowUp') {
+      evt.preventDefault();
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+    } else if (evt.key === 'Enter') {
+      evt.preventDefault();
+      const chosen = items[activeIndex] || items[0];
+      if (chosen) {
+        input.value = chosen.dataset.name;
+        closeList();
+      }
+      return;
+    } else if (evt.key === 'Escape') {
+      closeList();
+      return;
+    } else {
+      return;
+    }
+    items.forEach((item, idx) => item.classList.toggle('active', idx === activeIndex));
+    items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+  });
+
+  document.addEventListener('click', evt => {
+    if (!listEl.contains(evt.target) && evt.target !== input) closeList();
+  });
 }
 
 function renderPresets() {
   const presets = presetsForFoods(state.foods);
   presetButtonsEl.innerHTML = presets.map(p => `<button class="preset-btn ${state.currentPreset === p.id ? 'active' : ''}" data-preset="${p.id}">${p.label}</button>`).join("");
-  presetButtonsEl.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => {
+  presetButtonsEl.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
       const preset = presets.find(p => p.id === btn.dataset.preset);
       if (!preset) return;
       state.currentPreset = preset.id;
       const preserve = Array.from({ length: 5 }, (_, i) => ({ name: preset.names[i] || "", qty: 1 }));
       renderSelectors(preserve);
       renderPresets();
-      calculateAll();
     });
   });
 }
 
 function clearResultsOnly() {
-  resultsAreaEl.classList.add("hidden");
-  selectionCardsEl.innerHTML = "";
+  resultsAreaEl.classList.add('hidden');
+  selectionCardsEl.innerHTML = '';
   buffWarningEl.hidden = true;
-  buffChipsEl.innerHTML = "";
+  buffWarningEl.classList.remove('success');
+  buffChipsEl.innerHTML = '';
   buffsTableWrapEl.innerHTML = `<div class="empty">No foods selected yet.</div>`;
-  scoreCardsEl.innerHTML = "";
+  scoreCardsEl.innerHTML = '';
   buildInsightsEl.innerHTML = `<div class="empty">Build score summary appears here after calculating a selection.</div>`;
   shoppingWrapEl.innerHTML = `<div class="empty">No ingredients to show yet.</div>`;
   state.calculated = false;
@@ -245,7 +361,7 @@ function renderSelectedCards(selectedFoods) {
         <div>
           <div class="recipe-name">${food.name}</div>
           <div class="meta-row">
-            <span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span>
+            <span class="badge tier-${food.tier || 'unknown'}">${food.tier || '—'} Tier</span>
             <span class="badge">${food.bench}</span>
             <span class="badge">${fmtMaybe(food.duration_s)}s</span>
           </div>
@@ -255,14 +371,17 @@ function renderSelectedCards(selectedFoods) {
       <div class="recipe-qty">Craft quantity: x${fmtMaybe(food.craftQty)}</div>
       ${food.notes ? `<div class="small-muted">${food.notes}</div>` : `<div class="small-muted">Modifier: ${food.modifier || food.name}</div>`}
     </article>
-  `).join("");
+  `).join('');
 
   const duplicates = detectDuplicateBuffs(selectedFoods);
   if (duplicates.length) {
     buffWarningEl.hidden = false;
-    buffWarningEl.innerHTML = `<strong>Potential in-game overlap:</strong> ${duplicates.slice(0, 5).map(d => `${(selectedFoods[0].buffs?.[d.key]?.label || d.key)} (${d.names.length} foods)`).join(" • ")}`;
+    buffWarningEl.classList.remove('success');
+    buffWarningEl.innerHTML = `<strong>Potential in-game overlap:</strong> ${duplicates.slice(0, 5).map(d => `${(selectedFoods.find(f => f.buffs?.[d.key])?.buffs?.[d.key]?.label || d.key)} (${d.names.length} foods)`).join(' • ')}`;
   } else {
-    buffWarningEl.hidden = true;
+    buffWarningEl.hidden = false;
+    buffWarningEl.classList.add('success');
+    buffWarningEl.innerHTML = `<strong>Unique buff profile:</strong> no duplicate buff categories detected.`;
   }
 }
 
@@ -271,14 +390,14 @@ function renderCombinedBuffs(selectedFoods) {
   let rows = getAllBuffKeys(selectedFoods).map(item => ({ key: item.key, label: item.label, value: totals[item.key] || 0 }));
   if (hideZeroBuffsEl.checked) rows = rows.filter(r => r.value !== 0);
   if (sortBuffsEl.checked) rows.sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || a.label.localeCompare(b.label));
-  buffChipsEl.innerHTML = rows.slice(0, 8).map(row => `<span class="chip">${row.label}: ${fmtMaybe(row.value)}</span>`).join("");
-  buffsTableWrapEl.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Buff</th><th class="number">Total</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.label}</td><td class="number">${fmtMaybe(row.value)}</td></tr>`).join("")}</tbody></table></div>`;
+  buffChipsEl.innerHTML = rows.slice(0, 10).map(row => `<span class="chip">${row.label}: ${fmtMaybe(row.value)}</span>`).join('');
+  buffsTableWrapEl.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Buff</th><th class="number">Total</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.label}</td><td class="number">${fmtMaybe(row.value)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function renderScores(selectedFoods) {
   const totals = Object.fromEntries(BUFF_DIMS.map(([key]) => [key, 0]));
   selectedFoods.forEach(food => BUFF_DIMS.forEach(([key]) => totals[key] += Number(food.scores?.[key] || 0)));
-  scoreCardsEl.innerHTML = BUFF_DIMS.map(([key, label]) => `<article class="score-card"><div class="score-name">${label}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join("");
+  scoreCardsEl.innerHTML = BUFF_DIMS.map(([key, label]) => `<article class="score-card"><div class="score-name">${label}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join('');
   const sorted = [...BUFF_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).map(([key, label]) => ({ key, label, value: totals[key] }));
   const topBench = Object.entries(selectedFoods.reduce((acc, food) => { acc[food.bench] = (acc[food.bench] || 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1])[0];
   buildInsightsEl.innerHTML = `
@@ -296,7 +415,7 @@ function renderShopping(selectedFoods) {
         <td class="number">${fmtMaybe(row.qty)}</td>
         <td>${row.unit || 'item'}</td>
         <td>${[...new Set(row.recipes)].join(', ')}</td>
-      </tr>`).join("")}</tbody></table></div>`;
+      </tr>`).join('')}</tbody></table></div>`;
 }
 
 function renderRankings() {
@@ -307,23 +426,19 @@ function renderRankings() {
       <td class="rank-cell">${idx + 1}</td>
       <td><div class="recipe-cell">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div></td>
       <td>${food.bench}</td>
-      <td><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'}</span></td>
+      <td><span class="badge tier-${food.tier || 'unknown'}">${food.tier || '—'}</span></td>
       <td class="number">${fmtMaybe(food.scores?.overall)}</td>
       <td class="number">${fmtMaybe(food.scores?.efficiency)}</td>
       <td class="number">${fmtMaybe(food.scores?.survival)}</td>
       <td class="number">${fmtMaybe(food.scores?.combat)}</td>
       <td class="number">${fmtMaybe(food.scores?.exploration)}</td>
-    </tr>`).join("")}</tbody></table></div>`;
+    </tr>`).join('')}</tbody></table></div>`;
 }
 
 function buildSummaryText(selectedFoods) {
   const totals = Object.fromEntries(BUFF_DIMS.map(([key]) => [key, 0]));
   selectedFoods.forEach(food => BUFF_DIMS.forEach(([key]) => totals[key] += Number(food.scores?.[key] || 0)));
-  const archetypes = [...BUFF_DIMS]
-    .sort((a, b) => totals[b[0]] - totals[a[0]])
-    .slice(0, 3)
-    .map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
-
+  const archetypes = [...BUFF_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).slice(0, 3).map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
   return [
     `Icarus Food Calculator — Build Summary`,
     `Created by fernandobacate`,
@@ -353,15 +468,32 @@ async function copyText(text, successLabel, fallbackLabel) {
   }
 }
 
+function updateUrlFromSelection(selectedFoods) {
+  const build = selectedFoods.map(food => `${encodeURIComponent(food.name)}~${encodeURIComponent(food.craftQty || 1)}`).join('|');
+  const url = new URL(window.location.href);
+  if (build) url.searchParams.set('build', build);
+  else url.searchParams.delete('build');
+  if (strictModeEl.checked) url.searchParams.set('strict', '1'); else url.searchParams.delete('strict');
+  if (isEmbed) url.searchParams.set('embed', '1');
+  history.replaceState(null, '', url.toString());
+}
+
 function calculateAll() {
   const selectedFoods = getDraftSelection();
   if (!selectedFoods.length) {
     clearResultsOnly();
+    updateUrlFromSelection([]);
+    return;
+  }
+  const duplicates = detectDuplicateBuffs(selectedFoods);
+  if (strictModeEl.checked && duplicates.length) {
+    alert(`Strict mode blocked this build because duplicate buff categories were found: ${duplicates.map(d => selectedFoods.find(f => f.buffs?.[d.key])?.buffs?.[d.key]?.label || d.key).join(', ')}`);
     return;
   }
   state.calculated = true;
   state.calculatedFoods = selectedFoods;
-  resultsAreaEl.classList.remove("hidden");
+  updateUrlFromSelection(selectedFoods);
+  resultsAreaEl.classList.remove('hidden');
   renderSelectedCards(selectedFoods);
   renderCombinedBuffs(selectedFoods);
   renderScores(selectedFoods);
@@ -373,16 +505,69 @@ function clearAll() {
   renderPresets();
   renderSelectors(Array.from({ length: 5 }, () => ({ name: "", qty: 1 })));
   clearResultsOnly();
+  const url = new URL(window.location.href);
+  url.searchParams.delete('build');
+  url.searchParams.delete('strict');
+  if (isEmbed) url.searchParams.set('embed', '1');
+  history.replaceState(null, '', url.toString());
 }
 
 function fillRandomBuild() {
   const pool = [...state.foods].sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0)).slice(0, 25);
-  const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 5);
+  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
   const preserve = shuffled.map(food => ({ name: food.name, qty: 1 }));
   state.currentPreset = null;
   renderPresets();
   renderSelectors(preserve);
   calculateAll();
+}
+
+function generateOptimalBuild() {
+  const mode = strictModeEl.checked ? 'overall-strict' : 'overall';
+  const sorted = [...state.foods].sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0));
+  const chosen = [];
+  const usedBuffs = new Set();
+  for (const food of sorted) {
+    const keys = Object.keys(food.buffs || {});
+    if (strictModeEl.checked && keys.some(key => usedBuffs.has(key))) continue;
+    chosen.push(food);
+    if (strictModeEl.checked) keys.forEach(key => usedBuffs.add(key));
+    if (chosen.length === 5) break;
+  }
+  const preserve = chosen.map(food => ({ name: food.name, qty: 1 }));
+  state.currentPreset = null;
+  renderPresets();
+  renderSelectors(preserve);
+  calculateAll();
+}
+
+function exportBuildImage() {
+  if (!state.calculatedFoods.length) {
+    alert('Calculate a build first.');
+    return;
+  }
+  document.body.classList.add('exporting');
+  html2canvas(document.querySelector('.shell'), { backgroundColor: '#08090c', scale: 2, useCORS: true }).then(canvas => {
+    const link = document.createElement('a');
+    link.download = 'icarus-food-build.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }).finally(() => {
+    document.body.classList.remove('exporting');
+  });
+}
+
+function applyBuildFromUrl() {
+  const buildParam = params.get('build');
+  if (!buildParam) return false;
+  const parts = buildParam.split('|').filter(Boolean).slice(0, 5).map(part => {
+    const [nameEnc, qtyEnc] = part.split('~');
+    return { name: decodeURIComponent(nameEnc || ''), qty: Math.max(1, Number(decodeURIComponent(qtyEnc || '1')) || 1) };
+  });
+  renderSelectors(parts);
+  if (params.get('strict') === '1') strictModeEl.checked = true;
+  calculateAll();
+  return true;
 }
 
 async function loadFoods() {
@@ -396,6 +581,7 @@ async function loadFoods() {
   renderRankings();
   clearResultsOnly();
   footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • searchable planner, presets, export-ready summary`;
+  applyBuildFromUrl();
 }
 
 benchFilterEl.addEventListener('change', () => {
@@ -412,6 +598,7 @@ sortBuffsEl.addEventListener('change', () => state.calculated && renderCombinedB
 calculateBtn.addEventListener('click', calculateAll);
 clearBtn.addEventListener('click', clearAll);
 randomBuildBtn.addEventListener('click', fillRandomBuild);
+optimalBuildBtn.addEventListener('click', generateOptimalBuild);
 copySummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(buildSummaryText(state.calculatedFoods), () => { copySummaryBtn.textContent = 'Summary copied'; setTimeout(() => copySummaryBtn.textContent = 'Copy build summary', 1400); }, 'Clipboard blocked. Copy manually:');
@@ -420,5 +607,10 @@ copyShoppingBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(shoppingText(state.calculatedFoods), () => { copyShoppingBtn.textContent = 'Shopping copied'; setTimeout(() => copyShoppingBtn.textContent = 'Copy shopping list', 1400); }, 'Clipboard blocked. Copy manually:');
 });
+copyLinkBtn.addEventListener('click', () => {
+  if (!state.calculatedFoods.length) return alert('Calculate a build first.');
+  copyText(window.location.href, () => { copyLinkBtn.textContent = 'Link copied'; setTimeout(() => copyLinkBtn.textContent = 'Copy build link', 1400); }, 'Clipboard blocked. Copy manually:');
+});
+exportImageBtn.addEventListener('click', exportBuildImage);
 
 loadFoods();
