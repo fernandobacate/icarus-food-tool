@@ -4,25 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Icarus Food Calculator</title>
-  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, shopping list, searchable planner slots, build presets, and export-ready summaries.">
+  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, shopping list, presets, strict mode, custom autocomplete, and shareable build links.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
   <div class="page-bg-fixed"></div>
   <div class="bg-grid"></div>
-
   <main class="shell">
-    <header class="hero">
+    <header class="hero" id="heroSection">
       <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
       <h1>Icarus Food Calculator</h1>
       <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
       <div class="hero-actions">
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
+        <button class="ghost-btn" id="optimalBuildBtn">Generate optimal build</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
+        <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
+        <button class="ghost-btn" id="exportImageBtn">Export build as PNG</button>
       </div>
     </header>
 
@@ -32,9 +36,10 @@
       <div class="panel-header">
         <div>
           <h2>Build Planner</h2>
-          <p>Pick up to 5 foods, set craft quantities, search recipes quickly, and calculate the final result only when you are ready. Duplicate buff types are allowed here for theorycrafting, and the warning will highlight where real in-game overlap may matter.</p>
+          <p>Pick up to 5 foods, set craft quantities, browse the full recipe list on click, and calculate the final result only when you are ready. Duplicate buff types are allowed for theorycrafting, and warnings will highlight where a real in-game overlap may matter.</p>
         </div>
         <div class="toggles">
+          <label class="switch"><input type="checkbox" id="strictMode"><span>Strict in-game mode</span></label>
           <label class="switch"><input type="checkbox" id="hideZeroBuffs" checked><span>Hide zero rows</span></label>
           <label class="switch"><input type="checkbox" id="sortBuffs" checked><span>Sort buffs</span></label>
         </div>
@@ -72,43 +77,45 @@
       </div>
 
       <div id="selectors" class="selectors"></div>
-      <div class="hint-row">Tip: type part of a recipe name in any slot to get browser suggestions.</div>
+      <div class="hint-row">Click any slot to browse all recipes, or start typing to filter instantly.</div>
     </section>
 
-    <section id="resultsArea" class="results-stack hidden">
-      <section class="panel" id="selectedFoodsPanel">
-        <div class="panel-header">
-          <div>
-            <h2>Selected Recipes</h2>
-            <p>Final calculated selection, recipe notes, and quick metadata for the current build.</p>
+    <section id="captureArea" class="capture-area">
+      <section id="resultsArea" class="results-stack hidden">
+        <section class="panel" id="selectedFoodsPanel">
+          <div class="panel-header">
+            <div>
+              <h2>Selected Recipes</h2>
+              <p>Final calculated selection, recipe notes, and quick metadata for the current build.</p>
+            </div>
           </div>
-        </div>
-        <div id="selectionCards" class="selection-cards"></div>
-        <div class="warning" id="buffWarning" hidden></div>
-      </section>
-
-      <div class="dashboard-grid">
-        <section class="panel">
-          <h2>Combined Buffs</h2>
-          <div id="buffChips" class="buff-chips"></div>
-          <div id="buffsTableWrap"></div>
+          <div id="selectionCards" class="selection-cards"></div>
+          <div class="warning" id="buffWarning" hidden></div>
         </section>
 
-        <section class="panel">
-          <h2>Build Score Snapshot</h2>
-          <div id="scoreCards" class="score-cards"></div>
-          <div id="buildInsights" class="insights"></div>
-        </section>
-      </div>
+        <div class="dashboard-grid">
+          <section class="panel">
+            <h2>Combined Buffs</h2>
+            <div id="buffChips" class="buff-chips"></div>
+            <div id="buffsTableWrap"></div>
+          </section>
 
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>Shopping List</h2>
-            <p>Aggregated ingredients for the selected recipes. Quantities reflect exactly what you selected.</p>
-          </div>
+          <section class="panel">
+            <h2>Build Score Snapshot</h2>
+            <div id="scoreCards" class="score-cards"></div>
+            <div id="buildInsights" class="insights"></div>
+          </section>
         </div>
-        <div id="shoppingWrap"></div>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Shopping List</h2>
+              <p>Aggregated ingredients for the selected recipes. Quantities reflect exactly what you selected.</p>
+            </div>
+          </div>
+          <div id="shoppingWrap"></div>
+        </section>
       </section>
     </section>
 
@@ -131,7 +138,7 @@
       <div id="rankingsWrap"></div>
     </section>
 
-    <footer class="footer">
+    <footer class="footer" id="footerSection">
       <div class="credits-block">
         <div class="credits-title">Credits</div>
         <div class="credits-line">Created and maintained by <strong>fernandobacate</strong> — beginner coding enthusiast, survival game lover, and former ARK addict building tools for the Icarus community.</div>
@@ -139,7 +146,5 @@
       <span id="footerMeta"></span>
     </footer>
   </main>
-
-  <script src="app.js"></script>
 </body>
 </html>
