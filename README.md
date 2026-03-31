@@ -28,3 +28,9 @@ Place your images here:
 Recommended icon size: `128x128` PNG with transparent background.
 Recommended hero size: `1920x720`
 Recommended page background size: `1920x1080`
+
+
+V13 notes:
+- Choose stomach slots first (3, 4, 5, or 6).
+- Build generator and planner respect the selected slot cap.
+- Export build now includes the shopping list in the generated PNG.

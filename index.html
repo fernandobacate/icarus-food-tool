@@ -24,7 +24,7 @@
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
         <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
-        <button class="ghost-btn" id="exportPngBtn">Export build as PNG</button>
+        <button class="ghost-btn" id="exportPngBtn">Export build image</button>
       </div>
     </header>
 
@@ -34,7 +34,7 @@
       <div class="panel-header">
         <div>
           <h2>Build Planner</h2>
-          <p>Pick up to 5 foods, set craft quantities, browse the full recipe list on click, and calculate only when you are ready. In strict mode, duplicate status-effect families do not stack — they only refresh the same effect.</p>
+          <p>Choose your stomach-slot limit first, then pick foods, set craft quantities, browse the full recipe list on click, and calculate only when you are ready. In strict mode, duplicate status-effect families do not stack — they only refresh the same effect.</p>
         </div>
         <div class="toggles">
           <label class="switch"><input type="checkbox" id="strictMode"><span>Strict in-game mode</span></label>
@@ -46,6 +46,16 @@
 
       <div class="toolbar">
         <div class="toolbar-left">
+          <label>
+            <span>Stomach slots</span>
+            <select id="stomachSlots">
+              <option value="" selected>Choose...</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </label>
           <label>
             <span>Carnivore talent</span>
             <select id="carnivoreToggle">
@@ -84,6 +94,7 @@
       </div>
 
       <div id="selectors" class="selectors"></div>
+      <div id="slotPrompt" class="empty planner-empty">Choose your stomach-slot count to unlock the planner and build generator.</div>
       <div class="hint-row">Click any slot to browse all recipes, or start typing to filter instantly.</div>
     </section>
 
@@ -91,7 +102,7 @@
       <div class="panel-header">
         <div>
           <h2>Optimal Build Generator</h2>
-          <p>Choose an archetype and review three suggested builds by progression stage. Apply any suggestion to the planner, then set craft quantities yourself before calculating the final shopping list.</p>
+          <p>Choose your stomach-slot count and then an archetype to review three suggested builds by progression stage. Apply any suggestion to the planner, then set craft quantities yourself before calculating the final shopping list.</p>
         </div>
       </div>
       <div class="toolbar buildgen-toolbar">

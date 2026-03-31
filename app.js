@@ -38,6 +38,7 @@ const els = {
   strictMode: document.getElementById("strictMode"),
   ignoreConsumeStats: document.getElementById("ignoreConsumeStats"),
   generatorArchetype: document.getElementById("generatorArchetype"),
+  stomachSlots: document.getElementById("stomachSlots"),
   generatorWrap: document.getElementById("generatorWrap"),
 };
 
@@ -90,6 +91,12 @@ function isCarnivoreOn() {
 }
 function currentSettingsLabel() {
   return `Carnivore ${isCarnivoreOn() ? 'ON' : 'OFF'} • ${els.ignoreConsumeStats.checked ? 'Consume stats ignored' : 'Consume stats included'} • ${els.strictMode.checked ? 'Strict in-game mode' : 'Free theorycraft mode'}`;
+}
+function selectedSlotCount() {
+  return Number(els.stomachSlots?.value || 0);
+}
+function effectivePlannerSlotCount() {
+  return Math.max(selectedSlotCount(), document.querySelectorAll('.slot').length || 0);
 }
 
 // ---------- Score mapping ----------
@@ -217,15 +224,23 @@ function renderPresets() {
 
 // ---------- Planner + autocomplete ----------
 function preserveDraft() {
-  return Array.from({length:5}, (_,i)=>({
+  const count = effectivePlannerSlotCount();
+  return Array.from({length:count}, (_,i)=>({
     name: document.getElementById(`slot-${i}`)?.value || "",
     qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1)
   }));
 }
 function renderSelectors(preserve = []) {
   applyFoodFilter();
+  const count = selectedSlotCount();
   els.selectors.innerHTML = "";
-  for (let i=0;i<5;i++) {
+  const slotPrompt = document.getElementById('slotPrompt');
+  if (!count) {
+    if (slotPrompt) slotPrompt.classList.remove('hidden');
+    return;
+  }
+  if (slotPrompt) slotPrompt.classList.add('hidden');
+  for (let i=0;i<count;i++) {
     const entry = preserve[i] || {name:"", qty:1};
     els.selectors.insertAdjacentHTML("beforeend", `
       <div class="slot" id="slot-wrap-${i}">
@@ -240,7 +255,7 @@ function renderSelectors(preserve = []) {
       </div>
     `);
   }
-  for (let i=0;i<5;i++) setupAutocomplete(i);
+  for (let i=0;i<count;i++) setupAutocomplete(i);
 }
 function setupAutocomplete(index) {
   const input = document.getElementById(`slot-${index}`);
@@ -323,7 +338,8 @@ function setupAutocomplete(index) {
 function getDraftSelection() {
   const draft = [];
   const lookup = new Map(allAdjustedFoods().map(f => [f.name.toLowerCase(), f]));
-  for (let i=0;i<5;i++) {
+  const count = effectivePlannerSlotCount();
+  for (let i=0;i<count;i++) {
     const input = document.getElementById(`slot-${i}`);
     const qtyInput = document.getElementById(`slot-qty-${i}`);
     const value = (input?.value || "").trim().toLowerCase();
@@ -336,13 +352,16 @@ function getDraftSelection() {
 
 // ---------- Results ----------
 function aggregateEffectFoods(selectedFoods) {
-  if (!els.strictMode.checked) return selectedFoods;
-  const seen = new Set();
+  const seenNames = new Set();
+  const seenFamilies = new Set();
   const result = [];
   for (const food of selectedFoods) {
+    const recipeKey = slugify(food.name);
+    if (seenNames.has(recipeKey)) continue;
     const fam = effectFamily(food);
-    if (seen.has(fam)) continue;
-    seen.add(fam);
+    if (els.strictMode.checked && seenFamilies.has(fam)) continue;
+    seenNames.add(recipeKey);
+    seenFamilies.add(fam);
     result.push(food);
   }
   return result;
@@ -543,26 +562,28 @@ function styleScore(food, archetype, style) {
   return target * 1.15 + food.computedScores.overall * 0.18 - complexity * 1.5;
 }
 function generateBuild(style, archetype, priorBuilds=[]) {
+  const slotCap = Math.max(1, selectedSlotCount() || 5);
   const foods = candidatePool(allAdjustedFoods(), style);
   const previousNames = new Set(priorBuilds.flat().map(f=>f.name));
   const previousFamilies = new Set(priorBuilds.flat().map(effectFamily));
   const sorted = [...foods].sort((a,b)=>styleScore(b, archetype, style)-styleScore(a, archetype, style));
   const build = [];
   const usedFamilies = new Set();
-  // first pass prioritize fresh names/families
+  const usedNames = new Set();
+
   for (const food of sorted) {
     const fam = effectFamily(food);
-    if (usedFamilies.has(fam)) continue;
-    const shouldAvoid = (style !== 'premium') && (previousFamilies.has(fam) || previousNames.has(food.name));
+    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
+    const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
     if (shouldAvoid) continue;
-    build.push(food); usedFamilies.add(fam);
-    if (build.length === 5) break;
+    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
+    if (build.length === slotCap) break;
   }
   for (const food of sorted) {
     const fam = effectFamily(food);
-    if (usedFamilies.has(fam)) continue;
-    build.push(food); usedFamilies.add(fam);
-    if (build.length === 5) break;
+    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
+    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
+    if (build.length === slotCap) break;
   }
   return build;
 }
@@ -578,6 +599,11 @@ function buildSummaryMetrics(build) {
 }
 function renderGenerator() {
   const archetype = els.generatorArchetype.value;
+  const slotCap = selectedSlotCount();
+  if (!slotCap) {
+    els.generatorWrap.innerHTML = `<div class="empty big-empty">Choose your stomach-slot count first to unlock suggested builds.</div>`;
+    return;
+  }
   if (!archetype) {
     els.generatorWrap.innerHTML = `<div class="empty big-empty">Choose an archetype first to generate suggested builds.</div>`;
     return;
@@ -599,7 +625,7 @@ function renderGenerator() {
       <div class="build-subtitle">${meta.subtitle}</div>
       <div class="build-badges">
         <span class="build-badge">${item.style === 'budget' ? 'Early game / lower cost' : item.style === 'practical' ? 'Mid game / balanced' : 'Endgame / best possible'}</span>
-        <span class="build-badge">Overall ${fmtMaybe(metrics.overall)}</span>
+        <span class="build-badge">${slotCap} slots</span><span class="build-badge">Overall ${fmtMaybe(metrics.overall)}</span>
       </div>
       <div class="build-foods">${item.foods.map(food => `<div class="build-food-chip">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>
       <div class="build-metrics">
@@ -614,7 +640,7 @@ function renderGenerator() {
   els.generatorWrap.querySelectorAll('.use-build-btn').forEach((btn, idx) => {
     btn.addEventListener('click', () => {
       clearPlanner(false);
-      builds[idx].foods.forEach((food, i) => {
+      builds[idx].foods.slice(0, selectedSlotCount() || 5).forEach((food, i) => {
         document.getElementById(`slot-${i}`).value = food.name;
         document.getElementById(`slot-qty-${i}`).value = 1;
       });
@@ -659,6 +685,7 @@ function encodeBuildState() {
     c: els.carnivoreToggle.value,
     s: els.strictMode.checked ? 1 : 0,
     i: els.ignoreConsumeStats.checked ? 1 : 0,
+    slots: selectedSlotCount(),
     foods: selected
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
@@ -671,18 +698,20 @@ function decodeBuildState(str) {
 function applyBuildState(payload) {
   if (!payload) return;
   if (payload.c) els.carnivoreToggle.value = payload.c;
+  if (payload.slots) els.stomachSlots.value = String(payload.slots);
   els.strictMode.checked = !!payload.s;
   els.ignoreConsumeStats.checked = !!payload.i;
   clearPlanner(false);
-  (payload.foods || []).slice(0,5).forEach((item, i) => {
+  (payload.foods || []).slice(0, selectedSlotCount() || 5).forEach((item, i) => {
     document.getElementById(`slot-${i}`).value = item.name || "";
     document.getElementById(`slot-qty-${i}`).value = item.qty || 1;
   });
 }
 async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
+  const shopping = aggregateIngredients(state.calculatedFoods).slice(0, 14);
   const canvas = document.createElement('canvas');
-  canvas.width = 1400; canvas.height = 840;
+  canvas.width = 1600; canvas.height = 1200;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#0a0c11'; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle = '#f3f6fb'; ctx.font = 'bold 40px Inter, sans-serif';
@@ -690,13 +719,23 @@ async function exportBuildAsPng() {
   ctx.font = '22px Inter, sans-serif';
   ctx.fillStyle = '#d8dfeb';
   let y = 130;
-  state.calculatedFoods.forEach((food, idx) => {
-    ctx.fillText(`${idx+1}. ${food.name} x${food.craftQty}`, 60, y);
-    y += 40;
-  });
-  y += 20;
   ctx.fillStyle = '#e0c480';
   ctx.fillText(currentSettingsLabel(), 60, y);
+  y += 46;
+  ctx.fillStyle = '#f3f6fb';
+  state.calculatedFoods.forEach((food, idx) => {
+    ctx.fillText(`${idx+1}. ${food.name} x${food.craftQty}`, 60, y);
+    y += 36;
+  });
+  y += 28;
+  ctx.fillStyle = '#e0c480';
+  ctx.fillText('Shopping list', 60, y);
+  y += 40;
+  ctx.fillStyle = '#d8dfeb';
+  shopping.forEach((row) => {
+    ctx.fillText(`• ${row.name}: ${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 60, y);
+    y += 30;
+  });
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
   link.download = 'icarus-build.png';
@@ -707,7 +746,7 @@ async function exportBuildAsPng() {
 function clearPlanner(clearPreset=true) {
   if (clearPreset) state.currentPreset = null;
   renderPresets();
-  renderSelectors(Array.from({length:5},()=>({name:"", qty:1})));
+  renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   clearResultsOnly();
 }
 function fillRandomBuild() {
@@ -718,7 +757,7 @@ function fillRandomBuild() {
     const fam = effectFamily(food);
     if (used.has(fam)) continue;
     picked.push(food); used.add(fam);
-    if (picked.length === 5) break;
+    if (picked.length === (selectedSlotCount() || 5)) break;
   }
   clearPlanner(false);
   picked.forEach((food,i)=> {
@@ -741,7 +780,7 @@ async function loadFoods() {
   renderFilters();
   renderKPIs();
   renderPresets();
-  renderSelectors(Array.from({length:5},()=>({name:"", qty:1})));
+  renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   renderRankings();
   renderGenerator();
   clearResultsOnly();
@@ -763,6 +802,7 @@ els.sortFoods.addEventListener('change', () => renderSelectors(preserveDraft()))
 els.rankingLimit.addEventListener('change', renderRankings);
 els.hideZeroBuffs.addEventListener('change', () => state.calculated && calculateAll());
 els.sortBuffs.addEventListener('change', () => state.calculated && calculateAll());
+els.stomachSlots.addEventListener('change', () => { clearPlanner(false); renderGenerator(); renderPresets(); });
 els.carnivoreToggle.addEventListener('change', refreshDataViews);
 els.ignoreConsumeStats.addEventListener('change', refreshDataViews);
 els.strictMode.addEventListener('change', () => state.calculated && calculateAll());

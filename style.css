@@ -55,7 +55,8 @@ h1{font-size:clamp(2.3rem,4.6vw,4.1rem);margin:0 0 10px;line-height:1.01}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:18px}
 .kpi{background:linear-gradient(180deg, rgba(20,24,34,.95), rgba(20,24,34,.88));border:1px solid #313a52;border-radius:20px;padding:18px}
 .kpi-label{color:var(--muted);font-size:.84rem;margin-bottom:8px}.kpi-value{font-weight:800;font-size:1.85rem}.kpi-sub{color:#e0c480;font-size:.88rem;margin-top:6px}
-.controls-panel,.buildgen-panel{margin-bottom:18px; position:relative; overflow:visible; z-index:1}
+.controls-panel{margin-bottom:18px; position:relative; overflow:visible; z-index:5000}
+.buildgen-panel{margin-bottom:18px; position:relative; overflow:visible; z-index:1}
 .panel-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px}
 .panel h2{margin:0 0 6px;font-size:1.75rem}.panel p{margin:0;color:var(--muted);line-height:1.45}
 .toolbar,.toolbar-left,.toolbar-right,.toggles{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
@@ -76,7 +77,7 @@ button:hover{filter:brightness(1.08)}
   background:linear-gradient(180deg, rgba(26,32,48,.95), rgba(20,24,34,.92));
   border:1px solid #33405b;border-radius:18px;padding:14px; position:relative; overflow:visible; z-index:1;
 }
-.slot.open{z-index:2000}
+.slot.open{z-index:25000}
 .slot-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--muted);font-size:.85rem}
 .slot-controls{display:grid;grid-template-columns:1fr 96px;gap:10px;align-items:end}
 .slot-input-wrap{position:relative}
@@ -86,7 +87,7 @@ button:hover{filter:brightness(1.08)}
   width:max(100%, 430px); max-width:560px; max-height:360px; overflow:auto;
   background:linear-gradient(180deg, rgba(20,24,34,.99), rgba(16,18,24,.99));
   border:1px solid rgba(199,155,57,.22); border-radius:18px; box-shadow:0 18px 40px rgba(0,0,0,.48);
-  z-index:99999; padding:8px;
+  z-index:26000; padding:8px;
 }
 .auto-list.hidden{display:none}
 .auto-item{
@@ -168,3 +169,5 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
   .hero-actions button,.toolbar-right button{flex:1}.score-cards{grid-template-columns:1fr}.selectors{grid-template-columns:1fr}.slot-controls{grid-template-columns:1fr}.slot-qty-input{max-width:none}
   .auto-list{width:100%; max-width:none}
 }
+
+.planner-empty{margin-top:14px}
