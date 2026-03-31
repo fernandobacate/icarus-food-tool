@@ -359,7 +359,7 @@ function renderSelectors(preserve = []) {
         <div class="slot-header"><strong>Slot ${i + 1}</strong><span>${current ? "Draft selected" : "Empty"}</span></div>
         <div class="slot-controls">
           <div class="autocomplete-wrap">
-            <input class="wide-input autocomplete-input" id="slot-${i}" placeholder="Click or type to browse..." value="${current.replace(/"/g, '&quot;')}" autocomplete="off">
+            <input class="wide-input autocomplete-input" id="slot-${i}" placeholder="Click or type to browse..." value="${current.replace(/"/g, '&quot;')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true">
             <div id="autocomplete-${i}" class="autocomplete-dropdown hidden"></div>
           </div>
           <label>
@@ -395,6 +395,8 @@ function openAutocomplete(index, term = "") {
   state.activeAutocompleteSelection = list.length ? 0 : -1;
   closeAutocomplete(index, true);
   const dropdown = getAutocompleteDropdown(index);
+  const slot = document.getElementById(`slot-${index}`)?.closest(".slot");
+  if (slot) slot.classList.add("autocomplete-open");
   if (!dropdown) return;
   dropdown.innerHTML = list.length ? list.map((food, idx) => autocompleteItemMarkup(food, idx === state.activeAutocompleteSelection)).join("") : `<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No recipes found</div></div></div>`;
   dropdown.classList.remove("hidden");
@@ -408,6 +410,8 @@ function openAutocomplete(index, term = "") {
 
 function closeAutocomplete(exceptIndex = null, keepExcept = false) {
   for (let i = 0; i < 5; i++) {
+    const slot = document.getElementById(`slot-${i}`)?.closest(".slot");
+    if (slot && !(keepExcept && i === exceptIndex)) slot.classList.remove("autocomplete-open");
     if (keepExcept && i === exceptIndex) continue;
     const dropdown = getAutocompleteDropdown(i);
     if (!dropdown) continue;
@@ -417,6 +421,7 @@ function closeAutocomplete(exceptIndex = null, keepExcept = false) {
   if (!keepExcept) {
     state.activeAutocompleteItems = [];
     state.activeAutocompleteSelection = -1;
+    state.activeInputIndex = null;
   }
 }
 
@@ -630,26 +635,43 @@ function renderShopping(selectedFoods) {
       </tr>`).join("")}</tbody></table></div>`;
 }
 
-function renderTopBuilds(targetKey = archetypeSelectEl.value) {
+function renderTopBuilds(targetKey = archetypeSelectEl.value || "overall") {
+  topBuildsWrapEl.innerHTML = "";
   const builds = buildSuggestionsForArchetype(targetKey);
+  const archetypeLabel = targetKey === 'overall' ? 'All-round' : titleize(targetKey);
   topBuildsWrapEl.innerHTML = `<div class="top-builds-grid">${builds.map((build, buildIndex) => {
     const foods = build.foods.map(f => ({...f, craftQty:1, effective:true}));
     const scores = buildScoresForSelection(foods);
     const primary = targetKey === 'overall' ? 'overall' : targetKey;
+    const mainFoods = build.foods.slice(0, 3);
+    const secondaryFoods = build.foods.slice(3);
     return `
       <article class="build-suggestion">
-        <h3>${build.label} ${targetKey === 'overall' ? 'All-round' : titleize(targetKey)} Build</h3>
-        <div class="build-tags"><span class="badge">${build.description}</span><span class="badge">Overall ${fmtMaybe(scores.overall)}</span><span class="badge">${titleize(primary)} ${fmtMaybe(scores[primary] || 0)}</span></div>
-        <div class="build-recipes">
-          ${build.foods.map(food => `<div class="build-food-pill">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div>`).join('')}
+        <div class="build-card-top">
+          <div class="build-card-title">
+            <h3>${build.label} ${archetypeLabel} Build</h3>
+          </div>
+          <div class="build-tags">
+            <span class="badge">${build.description}</span>
+            <span class="badge">Overall ${fmtMaybe(scores.overall)}</span>
+            <span class="badge">${titleize(primary)} ${fmtMaybe(scores[primary] || 0)}</span>
+          </div>
         </div>
+
+        <div class="build-main-recipes">
+          ${mainFoods.map(food => `<div class="build-main-food">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div>`).join('')}
+        </div>
+
+        ${secondaryFoods.length ? `<div class="build-secondary-row">${secondaryFoods.map(food => `<div class="build-food-pill">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>` : ''}
+
         <div class="build-score-grid">
           <div class="build-score-mini"><div class="mini-label">Survival</div><div class="mini-value">${fmtMaybe(scores.survival)}</div></div>
           <div class="build-score-mini"><div class="mini-label">Melee</div><div class="mini-value">${fmtMaybe(scores.melee)}</div></div>
           <div class="build-score-mini"><div class="mini-label">Ranged</div><div class="mini-value">${fmtMaybe(scores.ranged)}</div></div>
         </div>
+
         <div class="build-footer">
-          <div class="small-muted">Apply this build to the planner, adjust craft quantities, then calculate the final shopping list.</div>
+          <div class="small-muted">Use this build, then set craft quantities in the planner before calculating the final shopping list.</div>
           <button class="use-build-btn" data-build-index="${buildIndex}" data-target-key="${targetKey}">Use this build</button>
         </div>
       </article>
@@ -674,6 +696,7 @@ function renderTopBuilds(targetKey = archetypeSelectEl.value) {
 
 function titleize(key) {
   const map = {xp_support:"XP / Support"};
+  if (typeof key !== "string") return "All-round";
   return map[key] || String(key).replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
 }
 
@@ -808,14 +831,25 @@ function loadFromURL() {
   strictModeEl.checked = params.get("s") === "1";
   ignoreConsumeStatsEl.checked = params.get("i") !== "0";
   const build = params.get("build");
-  if (!build) return Array.from({length:5},()=>({name:"",qty:1}));
+  if (!build) return { preserve: Array.from({length:5},()=>({name:"",qty:1})), fromURL:false };
   const parts = build.split("|").filter(Boolean).slice(0,5);
   const preserve = parts.map(part => {
     const [encodedName, qty] = part.split("~");
     return { name: decodeURIComponent(encodedName || ""), qty: Number(qty || 1) || 1 };
   });
   while (preserve.length < 5) preserve.push({name:"", qty:1});
-  return preserve;
+  return { preserve, fromURL:true };
+}
+
+function hardResetPlannerInputs() {
+  for (let i = 0; i < 5; i++) {
+    const input = document.getElementById(`slot-${i}`);
+    const qty = document.getElementById(`slot-qty-${i}`);
+    if (input) input.value = "";
+    if (qty) qty.value = "1";
+    const header = input?.closest(".slot")?.querySelector(".slot-header span");
+    if (header) header.textContent = "Empty";
+  }
 }
 
 async function loadFoods() {
@@ -826,12 +860,14 @@ async function loadFoods() {
   renderScoringNotes();
   renderKPIs();
   renderPresets();
-  const preserve = loadFromURL();
-  renderSelectors(preserve);
-  renderTopBuilds();
+  const loaded = loadFromURL();
+  renderSelectors(loaded.preserve);
+  if (!loaded.fromURL) {
+    requestAnimationFrame(() => setTimeout(hardResetPlannerInputs, 0));
+  }
+  renderTopBuilds(archetypeSelectEl.value || "overall");
   renderRankings();
   clearResultsOnly();
-  // shared build links can prefill the planner, but the user still decides when to calculate.
   footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • archetype-aware planner and build explorer`;
 }
 
@@ -853,8 +889,8 @@ sortBuffsEl.addEventListener('change', () => state.calculated && renderCombinedB
 calculateBtn.addEventListener('click', calculateAll);
 clearBtn.addEventListener('click', clearAll);
 randomBuildBtn.addEventListener('click', fillRandomBuild);
-generateBuildsBtn.addEventListener('click', renderTopBuilds);
-archetypeSelectEl.addEventListener('change', renderTopBuilds);
+generateBuildsBtn.addEventListener('click', () => renderTopBuilds());
+archetypeSelectEl.addEventListener('change', () => renderTopBuilds());
 
 copySummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');

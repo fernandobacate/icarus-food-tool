@@ -39,9 +39,10 @@ button{cursor:pointer;background:linear-gradient(180deg, rgba(199,155,57,.28), r
 .controls-panel{position:relative;overflow:visible;z-index:20;margin-bottom:18px}
 .selectors{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
 .slot{background:linear-gradient(180deg, rgba(26,32,48,.95), rgba(20,24,34,.92));border:1px solid #33405b;border-radius:18px;padding:14px;position:relative;overflow:visible;z-index:1}
+.slot.autocomplete-open{z-index:10020}
 .slot-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--muted);font-size:.85rem}
 .slot-controls{display:grid;grid-template-columns:1fr 96px;gap:10px;align-items:end}
-.autocomplete-wrap{position:relative;z-index:2000}
+.autocomplete-wrap{position:relative;z-index:2000;overflow:visible}
 .autocomplete-input{width:100%}
 .hint-row{margin-top:14px;color:var(--muted);font-size:.92rem}
 .hidden{display:none !important}
@@ -98,14 +99,14 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 .build-suggestion{border:1px solid var(--border);border-radius:18px;padding:14px;background:rgba(255,255,255,.02)}
 .build-suggestion h3{margin:0 0 8px}
 .build-suggestion .build-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-.autocomplete-dropdown{position:absolute;top:calc(100% + 8px);left:0;right:auto;width:max(100%, 430px);max-width:min(560px, 92vw);max-height:360px;overflow-y:auto;background:linear-gradient(180deg, rgba(20,24,34,.985), rgba(16,18,24,.985));border:1px solid rgba(199,155,57,.22);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.45);padding:8px;z-index:999999;backdrop-filter:blur(10px)}
+.autocomplete-dropdown{position:absolute;top:calc(100% + 8px);left:0;right:auto;width:max(100%, 430px);max-width:min(560px, 92vw);max-height:360px;overflow-y:auto;background:linear-gradient(180deg, rgba(20,24,34,.995), rgba(16,18,24,.995));border:1px solid rgba(199,155,57,.22);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.52);padding:8px;z-index:10050;backdrop-filter:blur(12px)}
 .autocomplete-item{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px;border-radius:14px;cursor:pointer}
 .autocomplete-item:hover,.autocomplete-item.active{background:rgba(199,155,57,.10)}
 .autocomplete-main{min-width:0}
 .autocomplete-name{font-weight:700;line-height:1.15;word-break:break-word}
 .autocomplete-meta{color:var(--muted);font-size:.86rem;margin-top:4px}
 .autocomplete-score{text-align:right;font-size:.88rem;color:#f0ddb0;white-space:nowrap}
-@media (max-width:980px){.dashboard-grid{grid-template-columns:1fr}.score-cards{grid-template-columns:1fr 1fr}.slot-controls{grid-template-columns:1fr 84px}.autocomplete-dropdown{position:absolute;top:calc(100% + 8px);left:0;right:auto;width:max(100%, 430px);max-width:min(560px, 92vw);max-height:360px;overflow-y:auto;background:linear-gradient(180deg, rgba(20,24,34,.985), rgba(16,18,24,.985));border:1px solid rgba(199,155,57,.22);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.45);padding:8px;z-index:999999;backdrop-filter:blur(10px)}}
+@media (max-width:980px){.dashboard-grid{grid-template-columns:1fr}.score-cards{grid-template-columns:1fr 1fr}.slot-controls{grid-template-columns:1fr 84px}.autocomplete-dropdown{position:absolute;top:calc(100% + 8px);left:0;right:auto;width:max(100%, 430px);max-width:min(560px, 92vw);max-height:360px;overflow-y:auto;background:linear-gradient(180deg, rgba(20,24,34,.995), rgba(16,18,24,.995));border:1px solid rgba(199,155,57,.22);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,.52);padding:8px;z-index:10050;backdrop-filter:blur(12px)}}
 @media (max-width:640px){.shell{padding:18px 14px 34px}.hero{padding:22px 20px}.hero-actions,.toolbar-left,.toolbar-right,.preset-buttons{width:100%}.hero-actions button,.toolbar-right button{flex:1}.score-cards{grid-template-columns:1fr}.selectors{grid-template-columns:1fr}.slot-controls{grid-template-columns:1fr}.slot-qty-input{max-width:none}}
 
 .build-recipes{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
@@ -117,3 +118,13 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 .build-score-mini .mini-label{font-size:.72rem;color:var(--muted)}
 .build-score-mini .mini-value{font-weight:700;margin-top:4px}
 .use-build-btn{padding:10px 12px;border-radius:12px}
+
+
+.build-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.build-card-title{display:flex;align-items:center;gap:10px}
+.build-card-title h3{margin:0}
+.build-main-recipes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.build-main-food{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);font-size:.92rem}
+.build-main-food .ingredient-mini{width:28px;height:28px;flex:0 0 28px;border-radius:9px}
+.build-secondary-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.build-meta-line{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px}

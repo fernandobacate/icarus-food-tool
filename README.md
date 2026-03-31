@@ -27,3 +27,9 @@ Use slug-style lowercase filenames:
 - `sugar-cubes.png`
 
 Recommended size: 128x128 PNG with transparent background.
+
+
+V11 updates:
+- planner opens clean unless a shared build URL is present
+- autocomplete stays above all planner content
+- build generator cards are more visual and reset correctly when archetype changes
