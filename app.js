@@ -93,6 +93,11 @@ function iconMarkup(name, type="recipes", className="icon-wrap") {
   const slug = slugify(name);
   return `<div class="${className}"><img src="assets/${type}/${slug}.png" alt="${name}" onerror="this.remove()"><span class="icon-fallback">${initials(name)}</span></div>`;
 }
+function categoryIconMarkup(cat, className="category-icon") {
+  const label = CATEGORY_LABELS[cat] || cat;
+  const fallback = CATEGORY_ICONS[cat] || '•';
+  return `<div class="${className}"><img src="assets/categories/${cat}.png" alt="${label}" onerror="this.remove()"><span class="category-icon-fallback">${fallback}</span></div>`;
+}
 function benchOrder(bench) {
   return {"Kitchen Bench":1,"Electric Stove":2,"Smoker":3}[bench] || 9;
 }
@@ -421,7 +426,7 @@ function renderCombinedBuffs(activeFoods) {
     }).join('');
     return `<section class="buff-category ${CATEGORY_COLORS[cat]}">
       <div class="category-head">
-        <div class="category-icon">${CATEGORY_ICONS[cat] || '•'}</div>
+        ${categoryIconMarkup(cat, "category-icon")}
         <div>
           <h3>${CATEGORY_LABELS[cat]}</h3>
           <div class="category-sub">${list.length} active buff${list.length === 1 ? '' : 's'}</div>
@@ -498,7 +503,7 @@ function renderScores(activeFoods) {
   els.scoreCards.innerHTML = ["survival","melee","ranged","exploration","xp_support","utility","overall","efficiency"].map(key=>`
     <article class="score-card ${key}">
       <div class="score-top">
-        <div class="score-icon">${CATEGORY_ICONS[key] || "•"}</div>
+        ${categoryIconMarkup(key, "score-icon")}
         <div class="score-name">${CATEGORY_LABELS[key]}</div>
       </div>
       <div class="score-value">${fmtMaybe(totals[key])}</div>
@@ -865,6 +870,20 @@ async function drawIconOrFallback(ctx, name, type, x, y, size=38) {
     drawText(ctx, initials(name), x+size/2-10, y+24, {font:'bold 18px Inter, Arial, sans-serif', color:'#f2ddb0'});
   }
 }
+async function drawCategoryIconOrFallback(ctx, cat, x, y, size=34) {
+  const img = await loadImageSafe(`assets/categories/${cat}.png`);
+  const fallback = CATEGORY_ICONS[cat] || '•';
+  fillRoundRect(ctx, x, y, size, size, 10, 'rgba(255,255,255,.05)', 'rgba(255,255,255,.08)');
+  if (img) {
+    ctx.save();
+    roundRect(ctx, x, y, size, size, 10);
+    ctx.clip();
+    ctx.drawImage(img, x, y, size, size);
+    ctx.restore();
+  } else {
+    drawText(ctx, fallback, x + 9, y + 23, {font:'20px Inter, Arial, sans-serif', color:'#f2ddb0'});
+  }
+}
 async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
   const selectedFoods = state.calculatedFoods;
@@ -913,7 +932,8 @@ async function exportBuildAsPng() {
   }
   drawText(ctx, 'ICARUS • COMMUNITY TOOL', 70, 72, {font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39'});
   drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
-  drawText(ctx, currentSettingsLabel(), 70, 172, {font:'24px Inter, Arial, sans-serif', color:'#e0c480'});
+  drawText(ctx, currentSettingsLabel(), 70, 170, {font:'22px Inter, Arial, sans-serif', color:'#e0c480'});
+  drawText(ctx, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, {font:'18px Inter, Arial, sans-serif', color:'#dfe4ea'});
 
   // Left column build
   fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
@@ -938,16 +958,17 @@ async function exportBuildAsPng() {
   fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
   drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
   const scoreBoxes = [
-    ['Survival', metrics.survival], ['Melee', metrics.melee], ['Ranged', metrics.ranged],
-    ['Exploration', metrics.exploration], ['XP / Support', metrics.xp_support], ['Utility', metrics.utility],
-    ['Overall', metrics.overall], ['Efficiency', metrics.efficiency]
+    ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
+    ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
+    ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
   let sx=88, sy=935;
-  scoreBoxes.forEach((item, idx) => {
+  scoreBoxes.forEach(async (item, idx) => {
     const bw=180, bh=58;
     fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    drawText(ctx, item[0], sx+14, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(item[1]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
+    await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
+    drawText(ctx, item[1], sx+48, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(item[2]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
     sx += bw + 12;
     if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
   });
@@ -974,7 +995,8 @@ async function exportBuildAsPng() {
     const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
     if (!list.length) continue;
     fillRoundRect(ctx, 955, cy, 780, 150, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-    drawText(ctx, CATEGORY_LABELS[cat], 978, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
+    await drawCategoryIconOrFallback(ctx, cat, 978, cy+8, 30);
+    drawText(ctx, CATEGORY_LABELS[cat], 1018, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
     let chipX = 978, chipY = cy+54;
     for (const row of list.slice(0, 6)) {
       const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);

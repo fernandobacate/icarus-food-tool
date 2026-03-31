@@ -191,3 +191,8 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 }
 
 .planner-empty{margin-top:14px}
+
+.category-icon img,.score-icon img{width:20px;height:20px;object-fit:contain;display:block}
+.category-icon-fallback{font-size:1rem;line-height:1}
+.score-icon .category-icon-fallback{font-size:.96rem}
+.category-head h3{margin:0;font-size:1rem}

@@ -34,3 +34,17 @@ V13 notes:
 - Choose stomach slots first (3, 4, 5, or 6).
 - Build generator and planner respect the selected slot cap.
 - Export build now includes the shopping list in the generated PNG.
+
+
+## Optional category icon support
+Drop PNG files into `assets/categories/` using these names:
+- `survival.png`
+- `melee.png`
+- `ranged.png`
+- `exploration.png`
+- `xp_support.png`
+- `utility.png`
+- `overall.png`
+- `efficiency.png`
+
+Recommended size: 64x64 PNG with transparent background.
