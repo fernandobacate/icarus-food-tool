@@ -585,7 +585,7 @@ function generateBuild(style, archetype, priorBuilds=[]) {
     build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
     if (build.length === slotCap) break;
   }
-  return build;
+  return build.slice(0, slotCap);
 }
 function buildSummaryMetrics(build) {
   const total = {survival:0, melee:0, ranged:0, overall:0};
@@ -619,6 +619,7 @@ function renderGenerator() {
   ];
   els.generatorWrap.innerHTML = builds.map((item, idx) => {
     const meta = buildStyleMeta(item.style, archLabel);
+    item.foods = item.foods.slice(0, slotCap);
     const metrics = buildSummaryMetrics(item.foods);
     return `<article class="build-card">
       <div class="build-title">${meta.title}</div>
@@ -627,7 +628,7 @@ function renderGenerator() {
         <span class="build-badge">${item.style === 'budget' ? 'Early game / lower cost' : item.style === 'practical' ? 'Mid game / balanced' : 'Endgame / best possible'}</span>
         <span class="build-badge">${slotCap} slots</span><span class="build-badge">Overall ${fmtMaybe(metrics.overall)}</span>
       </div>
-      <div class="build-foods">${item.foods.map(food => `<div class="build-food-chip">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>
+      <div class="build-foods">${item.foods.slice(0, slotCap).map(food => `<div class="build-food-chip">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>
       <div class="build-metrics">
         <div class="build-metric"><div class="build-metric-label">Survival</div><div class="build-metric-value">${fmtMaybe(metrics.survival)}</div></div>
         <div class="build-metric"><div class="build-metric-label">Melee</div><div class="build-metric-value">${fmtMaybe(metrics.melee)}</div></div>
@@ -707,41 +708,219 @@ function applyBuildState(payload) {
     document.getElementById(`slot-qty-${i}`).value = item.qty || 1;
   });
 }
+async 
+async function loadImageSafe(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+function roundRect(ctx, x, y, w, h, r=18) {
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  ctx.closePath();
+}
+function fillRoundRect(ctx, x, y, w, h, r, fill, stroke=null) {
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function drawText(ctx, text, x, y, options={}) {
+  ctx.fillStyle = options.color || '#f3f6fb';
+  ctx.font = options.font || '24px Inter, Arial, sans-serif';
+  ctx.textBaseline = options.baseline || 'alphabetic';
+  ctx.fillText(text, x, y);
+}
+function wrapLines(ctx, text, maxWidth) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, options={}) {
+  const lines = wrapLines(ctx, text, maxWidth);
+  lines.forEach((line, i) => drawText(ctx, line, x, y + i*lineHeight, options));
+  return y + lines.length*lineHeight;
+}
+function drawChip(ctx, text, x, y, bg='rgba(255,255,255,.06)', fg='#dfe4ea', border='rgba(255,255,255,.10)') {
+  ctx.font = '20px Inter, Arial, sans-serif';
+  const padX = 14, h = 36;
+  const w = ctx.measureText(text).width + padX*2;
+  fillRoundRect(ctx, x, y, w, h, 18, bg, border);
+  drawText(ctx, text, x+padX, y+24, {font:'20px Inter, Arial, sans-serif', color:fg});
+  return w;
+}
+function categoryAccent(cat) {
+  return {
+    survival:'#4dd29b',
+    melee:'#ff9f80',
+    ranged:'#7bc4ff',
+    exploration:'#d3c17a',
+    xp_support:'#d497ff',
+    utility:'#c1cad9',
+  }[cat] || '#dfe4ea';
+}
+async function drawIconOrFallback(ctx, name, type, x, y, size=38) {
+  const slug = slugify(name);
+  const img = await loadImageSafe(`assets/${type}/${slug}.png`);
+  if (img) {
+    fillRoundRect(ctx, x, y, size, size, 10, 'rgba(255,255,255,.04)', 'rgba(255,255,255,.08)');
+    ctx.save();
+    roundRect(ctx, x, y, size, size, 10);
+    ctx.clip();
+    ctx.drawImage(img, x, y, size, size);
+    ctx.restore();
+  } else {
+    fillRoundRect(ctx, x, y, size, size, 10, 'rgba(199,155,57,.14)', 'rgba(199,155,57,.24)');
+    drawText(ctx, initials(name), x+size/2-10, y+24, {font:'bold 18px Inter, Arial, sans-serif', color:'#f2ddb0'});
+  }
+}
 async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
-  const shopping = aggregateIngredients(state.calculatedFoods).slice(0, 14);
+  const selectedFoods = state.calculatedFoods;
+  const activeFoods = aggregateEffectFoods(selectedFoods);
+  const shopping = aggregateIngredients(selectedFoods).slice(0, 16);
+  const buffTotals = sumBuffs(activeFoods);
+  const categorized = {};
+  CATEGORY_ORDER.forEach(cat => categorized[cat] = []);
+  Object.entries(buffTotals).forEach(([label, value]) => {
+    const cat = categorizeBuffLabel(label);
+    if (!categorized[cat]) categorized[cat] = [];
+    categorized[cat].push({label, value});
+  });
+  const metrics = activeFoods.reduce((acc, food) => {
+    Object.entries(food.computedScores || {}).forEach(([k,v]) => { acc[k] = (acc[k] || 0) + Number(v || 0); });
+    return acc;
+  }, {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0});
+
   const canvas = document.createElement('canvas');
-  canvas.width = 1600; canvas.height = 1200;
+  canvas.width = 1800; canvas.height = 1600;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0a0c11'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = '#f3f6fb'; ctx.font = 'bold 40px Inter, sans-serif';
-  ctx.fillText('Icarus Food Calculator — Build Snapshot', 50, 70);
-  ctx.font = '22px Inter, sans-serif';
-  ctx.fillStyle = '#d8dfeb';
-  let y = 130;
-  ctx.fillStyle = '#e0c480';
-  ctx.fillText(currentSettingsLabel(), 60, y);
-  y += 46;
-  ctx.fillStyle = '#f3f6fb';
-  state.calculatedFoods.forEach((food, idx) => {
-    ctx.fillText(`${idx+1}. ${food.name} x${food.craftQty}`, 60, y);
-    y += 36;
+
+  // Background
+  ctx.fillStyle = '#07090f';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  const bgImg = await loadImageSafe('assets/bg/page-bg.jpg');
+  if (bgImg) {
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = 'rgba(7,9,15,.84)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Hero card
+  fillRoundRect(ctx, 40, 36, 1720, 180, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
+  const heroImg = await loadImageSafe('assets/bg/hero.png');
+  if (heroImg) {
+    ctx.save();
+    roundRect(ctx, 40, 36, 1720, 180, 28);
+    ctx.clip();
+    ctx.globalAlpha = 0.32;
+    ctx.drawImage(heroImg, 40, 36, 1720, 180);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+  drawText(ctx, 'ICARUS • COMMUNITY TOOL', 70, 72, {font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39'});
+  drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
+  drawText(ctx, currentSettingsLabel(), 70, 172, {font:'24px Inter, Arial, sans-serif', color:'#e0c480'});
+
+  // Left column build
+  fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Selected Recipes', 70, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, 70, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+  let y = 380;
+  for (let i=0; i<selectedFoods.length; i++) {
+    const food = selectedFoods[i];
+    fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
+    await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
+    drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
+    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+    const fam = effectFamily(food);
+    const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
+    const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
+    drawText(ctx, note, 650, y+50, {font:'18px Inter, Arial, sans-serif', color: active ? '#54d69a' : '#ffb5b5'});
+    y += 96;
+    if (y > 820) break;
+  }
+
+  // Build score
+  fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
+  const scoreBoxes = [
+    ['Survival', metrics.survival], ['Melee', metrics.melee], ['Ranged', metrics.ranged],
+    ['Exploration', metrics.exploration], ['XP / Support', metrics.xp_support], ['Utility', metrics.utility],
+    ['Overall', metrics.overall], ['Efficiency', metrics.efficiency]
+  ];
+  let sx=88, sy=935;
+  scoreBoxes.forEach((item, idx) => {
+    const bw=180, bh=58;
+    fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
+    drawText(ctx, item[0], sx+14, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(item[1]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
+    sx += bw + 12;
+    if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
   });
-  y += 28;
-  ctx.fillStyle = '#e0c480';
-  ctx.fillText('Shopping list', 60, y);
-  y += 40;
-  ctx.fillStyle = '#d8dfeb';
-  shopping.forEach((row) => {
-    ctx.fillText(`• ${row.name}: ${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 60, y);
-    y += 30;
-  });
+
+  // Shopping list
+  fillRoundRect(ctx, 65, 1105, 810, 430, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, 1148, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = 1188;
+  for (const row of shopping) {
+    await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
+    drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
+    drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 660, iy+13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
+    iy += 44;
+    if (iy > 1510) break;
+  }
+
+  // Right column buffs
+  fillRoundRect(ctx, 930, 250, 830, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Combined Buffs', 960, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, 'Grouped by gameplay category for faster reading.', 960, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+
+  let cy = 380;
+  for (const cat of CATEGORY_ORDER) {
+    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
+    if (!list.length) continue;
+    fillRoundRect(ctx, 955, cy, 780, 150, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+    drawText(ctx, CATEGORY_LABELS[cat], 978, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
+    let chipX = 978, chipY = cy+54;
+    for (const row of list.slice(0, 6)) {
+      const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
+      const w = drawChip(ctx, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
+      chipX += w + 8;
+      if (chipX > 1600) { chipX = 978; chipY += 46; }
+    }
+    cy += 166;
+    if (cy > 1380) break;
+  }
+
+  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, 1532, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
   link.download = 'icarus-build.png';
   link.click();
 }
 
+// ---------- Clear / random / init ----------
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {
   if (clearPreset) state.currentPreset = null;
