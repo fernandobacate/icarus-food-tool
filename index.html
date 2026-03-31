@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Icarus Food Calculator</title>
-  <meta name="description" content="Advanced Icarus food combo calculator with archetype-focused builds, grouped buffs, Carnivore toggle, shopping list, and shareable links.">
+  <meta name="description" content="Advanced Icarus food combo calculator with archetype build generation, grouped buffs, shopping list, and shareable build links.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,25 +13,24 @@
 <body>
   <div class="page-bg-fixed"></div>
   <div class="bg-grid"></div>
+
   <main class="shell">
     <header class="hero">
       <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
       <h1>Icarus Food Calculator</h1>
-      <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and create archetype-focused build suggestions for the Icarus community.</p>
+      <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
       <div class="hero-actions">
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
-        <button class="ghost-btn" id="generateBuildsBtn">Generate optimal builds</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
         <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
-        <button class="ghost-btn" id="downloadSummaryBtn">Download summary</button>
-        <button class="ghost-btn" id="downloadShoppingBtn">Download shopping</button>
+        <button class="ghost-btn" id="exportPngBtn">Export build as PNG</button>
       </div>
     </header>
 
     <section class="kpis" id="kpiGrid"></section>
 
-    <section class="panel controls-panel">
+    <section class="panel controls-panel" id="plannerPanel">
       <div class="panel-header">
         <div>
           <h2>Build Planner</h2>
@@ -45,11 +44,11 @@
         </div>
       </div>
 
-      <div class="toolbar toolbar-planner">
+      <div class="toolbar">
         <div class="toolbar-left">
           <label>
             <span>Carnivore talent</span>
-            <select id="carnivoreMode">
+            <select id="carnivoreToggle">
               <option value="off" selected>Off</option>
               <option value="on">On</option>
             </select>
@@ -88,19 +87,20 @@
       <div class="hint-row">Click any slot to browse all recipes, or start typing to filter instantly.</div>
     </section>
 
-    <section class="panel build-generator-panel">
+    <section class="panel buildgen-panel">
       <div class="panel-header">
         <div>
           <h2>Optimal Build Generator</h2>
-          <p>Choose an archetype and review multiple suggested builds by cost/tier. Apply any suggestion to the planner, then set craft quantities yourself before calculating the final shopping list.</p>
+          <p>Choose an archetype and review three suggested builds by progression stage. Apply any suggestion to the planner, then set craft quantities yourself before calculating the final shopping list.</p>
         </div>
       </div>
-      <div class="toolbar">
+      <div class="toolbar buildgen-toolbar">
         <div class="toolbar-left">
           <label>
             <span>Target archetype</span>
-            <select id="archetypeSelect">
-              <option value="overall">All-round</option>
+            <select id="generatorArchetype">
+              <option value="">Choose an archetype...</option>
+              <option value="allround">All-round</option>
               <option value="survival">Survival</option>
               <option value="melee">Melee</option>
               <option value="ranged">Ranged</option>
@@ -111,7 +111,9 @@
           </label>
         </div>
       </div>
-      <div id="topBuildsWrap"></div>
+      <div id="generatorWrap" class="generator-wrap">
+        <div class="empty big-empty">Choose an archetype first to generate suggested builds.</div>
+      </div>
     </section>
 
     <section id="resultsArea" class="results-stack hidden">
@@ -119,7 +121,7 @@
         <div class="panel-header">
           <div>
             <h2>Selected Recipes</h2>
-            <p>Final calculated selection, recipe notes, full individual buff breakdown, and quick metadata for the current build.</p>
+            <p>Final calculated selection, recipe notes, and quick metadata for the current build.</p>
           </div>
         </div>
         <div id="selectionCards" class="selection-cards"></div>
@@ -129,8 +131,7 @@
       <div class="dashboard-grid">
         <section class="panel">
           <h2>Combined Buffs</h2>
-          <div id="buffChips" class="buff-chips"></div>
-          <div id="buffsTableWrap"></div>
+          <div id="buffCategoryWrap" class="buff-category-wrap"></div>
         </section>
 
         <section class="panel">
@@ -150,41 +151,39 @@
         <div id="shoppingWrap"></div>
       </section>
 
-      <section class="panel info-panel">
+      <section class="panel scoring-notes-panel">
         <div class="panel-header">
           <div>
             <h2>Scoring notes</h2>
-            <p>The app uses transparent heuristic buckets instead of a single black-box score. Use these notes to understand what each number is actually trying to represent.</p>
+            <p>The app uses transparent heuristic buckets instead of a single black-box score. No one bucket is universally best in every context.</p>
           </div>
         </div>
-        <div id="scoringNotesWrap" class="scoring-notes-grid"></div>
+        <div class="scoring-grid">
+          <div class="score-note-card"><h3>Survival</h3><p>Health, stamina sustain, regen, resistances, and survivability.</p></div>
+          <div class="score-note-card"><h3>Melee</h3><p>Melee damage, melee speed, return melee damage, and critical damage.</p></div>
+          <div class="score-note-card"><h3>Ranged</h3><p>Projectile damage, reload speed, charge speed, explosive damage, and critical damage.</p></div>
+          <div class="score-note-card"><h3>Exploration</h3><p>Mobility, oxygen/water economy, encumbrance relief, cave sickness, and environmental support.</p></div>
+          <div class="score-note-card"><h3>XP / Support</h3><p>XP gained, shared XP, and tamed creature progression value.</p></div>
+          <div class="score-note-card"><h3>Efficiency</h3><p>How much value a recipe gives relative to complexity and cost.</p></div>
+        </div>
       </section>
     </section>
 
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h2>Rankings & Build Explorer</h2>
-          <p>Switch between individual recipe rankings and precomputed top builds for each archetype.</p>
+          <h2>Recipe Rankings</h2>
+          <p>Scout strong recipes before building a combo. Rankings come from the current scoring model and your Carnivore setting.</p>
         </div>
-        <div class="toolbar-right">
-          <label>
-            <span>View mode</span>
-            <select id="rankingViewMode">
-              <option value="recipes" selected>Recipes</option>
-              <option value="builds">Builds</option>
-            </select>
-          </label>
-          <label>
-            <span>Show top</span>
-            <select id="rankingLimit">
-              <option>10</option>
-              <option selected>20</option>
-              <option>30</option>
-              <option>50</option>
-            </select>
-          </label>
-        </div>
+        <label>
+          <span>Show top</span>
+          <select id="rankingLimit">
+            <option>10</option>
+            <option selected>20</option>
+            <option>30</option>
+            <option>50</option>
+          </select>
+        </label>
       </div>
       <div id="rankingsWrap"></div>
     </section>

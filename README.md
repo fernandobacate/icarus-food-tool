@@ -1,35 +1,30 @@
-# Icarus Food Calculator — V9
+# Icarus Food Calculator V12
 
 Static GitHub Pages tool for the Icarus community.
 
-## What's new in V9
-- Carnivore talent toggle (Smoker foods get +30% buff efficacy when enabled)
-- Strict in-game mode based on effect family / modifier refresh logic
-- Separate Melee and Ranged scoring
-- Archetype-focused build generator (Budget / Practical / Premium)
-- Grouped Combined Buffs by category
-- Shareable build links and text downloads
-- Scoring notes moved below Shopping List
-- Improved autocomplete with higher z-layer and wider dropdown
+## Included features
+- empty planner on first load
+- local autocomplete per slot
+- archetype-based build generator
+- three distinct build suggestions per archetype:
+  - Budget / early game
+  - Practical / mid game
+  - Premium / endgame
+- Carnivore toggle
+- strict in-game mode
+- grouped combined buffs
+- shopping list
+- shareable build links
+- PNG export
 
-## Image paths
-- Hero image: `assets/bg/hero.png`
-- Fixed page background: `assets/bg/page-bg.jpg`
+## Assets
+Place your images here:
 
-## Icon paths
-Put PNG icons in:
-- `assets/recipes/`
-- `assets/ingredients/`
+- `assets/bg/hero.png`
+- `assets/bg/page-bg.jpg`
+- `assets/recipes/*.png`
+- `assets/ingredients/*.png`
 
-Use slug-style lowercase filenames:
-- `chocolate-cake.png`
-- `banana-bread.png`
-- `sugar-cubes.png`
-
-Recommended size: 128x128 PNG with transparent background.
-
-
-V11 updates:
-- planner opens clean unless a shared build URL is present
-- autocomplete stays above all planner content
-- build generator cards are more visual and reset correctly when archetype changes
+Recommended icon size: `128x128` PNG with transparent background.
+Recommended hero size: `1920x720`
+Recommended page background size: `1920x1080`
