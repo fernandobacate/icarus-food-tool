@@ -1,21 +1,46 @@
-# Icarus Food Calculator — V7
+# Icarus Food Calculator — V8
 
-This version focuses on credibility and clarity:
+Static GitHub Pages tool for the Icarus community.
 
-- combat split into **melee** and **ranged**
-- strict mode checks **duplicate modifiers / status effects**, not fake stat overlap
-- transparent heuristic scoring buckets
-- detailed buff chips on each selected recipe card
-- optional toggle to ignore consume stats in scoring
-- page background and hero background support
+## Main changes in V8
+- Carnivore toggle (Smoker foods get +30% buff values when enabled)
+- Strict in-game mode based on effect family / modifier uniqueness
+- Combat split into **Melee** and **Ranged**
+- Custom autocomplete that opens on click and filters while typing
+- Shareable build links
+- Downloadable build summary and shopping list
+- Export build as PNG
+- Transparent scoring notes in the UI
 
-## Images
-- Hero: `assets/bg/hero.png`
-- Page background: `assets/bg/page-bg.jpg`
+## Asset folders
 
-## Icons
-Put transparent PNG files here:
+### Backgrounds
+- `assets/bg/hero.png`
+- `assets/bg/page-bg.jpg`
+
+### Recipe icons
+Put PNG files in:
 - `assets/recipes/`
+
+Example:
+- `assets/recipes/chocolate-cake.png`
+
+### Ingredient icons
+Put PNG files in:
 - `assets/ingredients/`
 
-Recommended icon size: **128x128** PNG.
+Example:
+- `assets/ingredients/sugar-cubes.png`
+
+## Naming rule
+Use slug-style filenames:
+- `Chocolate Cake` → `chocolate-cake.png`
+- `Sugar Cubes` → `sugar-cubes.png`
+
+## Recommended image sizes
+- Hero banner: **1920x720**
+- Page background: **1920x1080**
+- Icons: **128x128 PNG** with transparent background
+
+## Notes
+Scoring remains heuristic, but it is now more transparent and easier to interrogate than the earlier black-box version.
