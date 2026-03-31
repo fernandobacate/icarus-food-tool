@@ -965,30 +965,33 @@ async function exportBuildAsPng() {
   }
 
   // Build score
-  fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  fillRoundRect(ctx, 65, 860, 810, 260, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
   drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
   const scoreBoxes = [
     ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
     ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
     ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
+  const scoreStartX = 88;
+  const scoreStartY = 935;
+  const scoreCols = 4;
+  const bw = 184, bh = 76, gapX = 12, gapY = 14;
   for (let idx = 0; idx < scoreBoxes.length; idx++) {
-    const [key, label, value] = scoreBoxes[idx];
-    const bw = 180, bh = 58;
-    const col = idx % 4;
-    const row = Math.floor(idx / 4);
-    const boxX = 88 + col * (bw + 12);
-    const boxY = 935 + row * (bh + 12);
+    const item = scoreBoxes[idx];
+    const col = idx % scoreCols;
+    const row = Math.floor(idx / scoreCols);
+    const boxX = scoreStartX + col * (bw + gapX);
+    const boxY = scoreStartY + row * (bh + gapY);
     fillRoundRect(ctx, boxX, boxY, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    await drawCategoryIconOrFallback(ctx, key, boxX + 12, boxY + 12, 28);
-    drawText(ctx, label, boxX + 48, boxY + 22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(value), boxX + 14, boxY + 48, {font:'bold 28px Inter, Arial, sans-serif'});
+    await drawCategoryIconOrFallback(ctx, item[0], boxX + 12, boxY + 16, 24);
+    drawText(ctx, item[1], boxX + 44, boxY + 24, {font:'17px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(item[2]), boxX + 14, boxY + 58, {font:'bold 24px Inter, Arial, sans-serif'});
   }
 
   // Shopping list
-  fillRoundRect(ctx, 65, 1120, 810, 415, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Shopping List', 88, 1163, {font:'bold 34px Inter, Arial, sans-serif'});
-  let iy = 1203;
+  fillRoundRect(ctx, 65, 1145, 810, 390, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, 1188, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = 1228;
   for (const row of shopping) {
     await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
     drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
