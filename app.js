@@ -201,14 +201,19 @@ function bySelectedSort(a, b, mode) {
 function deriveBenchList() {
   const metaBenches = state.data?.meta?.benches && Object.keys(state.data.meta.benches).length
     ? Object.keys(state.data.meta.benches)
-    : [...new Set((state.foods || []).map(f => f.bench).filter(Boolean))];
-  return ["All", ...metaBenches.sort((a,b)=>a.localeCompare(b))];
+    : [];
+  const dataBenches = [...new Set((state.foods || []).map(f => f?.bench).filter(Boolean))];
+  const merged = [...new Set([...metaBenches, ...dataBenches])].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  return ["All", ...merged];
 }
-function renderFilters() {
-  const previous = els.benchFilter?.value || "All";
+function renderFilters(forceValue = null) {
+  if (!els.benchFilter) return;
+  const previous = forceValue || els.benchFilter.value || "All";
   const benches = deriveBenchList();
-  els.benchFilter.innerHTML = benches.map(b => `<option value="${b}">${b}</option>`).join("");
-  els.benchFilter.value = benches.includes(previous) ? previous : "All";
+  const safeBenches = benches.length ? benches : ["All"];
+  els.benchFilter.innerHTML = safeBenches.map(b => `<option value="${b}">${b}</option>`).join("");
+  els.benchFilter.value = safeBenches.includes(previous) ? previous : "All";
+  if (!els.benchFilter.value) els.benchFilter.value = "All";
 }
 function applyFoodFilter() {
   const bench = els.benchFilter.value || "All";
@@ -973,7 +978,7 @@ async function exportBuildAsPng() {
     ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
   let sx=88, sy=935;
-  scoreBoxes.forEach( (item, idx) => {
+  scoreBoxes.forEach(async (item, idx) => {
     const bw=180, bh=58;
     fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
     await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
@@ -1030,7 +1035,7 @@ async function exportBuildAsPng() {
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {
   if (clearPreset) state.currentPreset = null;
-  renderFilters();
+  renderFilters('All');
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   clearResultsOnly();
@@ -1064,7 +1069,7 @@ async function loadFoods() {
   const response = await fetch('./foods.json');
   state.data = await response.json();
   state.foods = state.data.foods;
-  renderFilters();
+  renderFilters('All');
   renderKPIs();
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
@@ -1086,7 +1091,7 @@ async function loadFoods() {
 }
 
 function syncPlannerState() {
-  renderFilters();
+  renderFilters(els.benchFilter?.value || 'All');
   const count = selectedSlotCount();
   const slotPrompt = document.getElementById('slotPrompt');
   if (count > 0) {
@@ -1106,7 +1111,14 @@ els.sortFoods.addEventListener('change', () => renderSelectors(preserveDraft()))
 els.rankingLimit.addEventListener('change', renderRankings);
 els.hideZeroBuffs.addEventListener('change', () => state.calculated && calculateAll());
 els.sortBuffs.addEventListener('change', () => state.calculated && calculateAll());
-els.stomachSlots.addEventListener('change', () => { renderFilters(); clearPlanner(false); renderGenerator(); renderPresets(); renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1}))); });
+els.stomachSlots.addEventListener('change', () => {
+  renderFilters('All');
+  clearPlanner(false);
+  renderGenerator();
+  renderPresets();
+  renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
+  applyFoodFilter();
+});
 els.carnivoreToggle.addEventListener('change', refreshDataViews);
 els.ignoreConsumeStats.addEventListener('change', refreshDataViews);
 els.strictMode.addEventListener('change', () => state.calculated && calculateAll());
