@@ -1,43 +1,21 @@
-# Icarus Food Calculator — V6
+# Icarus Food Calculator — V7
 
-Static GitHub Pages tool for the Icarus community.
+This version focuses on credibility and clarity:
 
-## What is included in V6
-- custom autocomplete that opens on click and filters while typing
-- strict in-game mode
-- build sharing by URL
-- embed mode with `?embed=1`
-- export current build as PNG
-- fixed full-page background layer
-- hero background image support
-- optional PNG icon support for recipes and ingredients
+- combat split into **melee** and **ranged**
+- strict mode checks **duplicate modifiers / status effects**, not fake stat overlap
+- transparent heuristic scoring buckets
+- detailed buff chips on each selected recipe card
+- optional toggle to ignore consume stats in scoring
+- page background and hero background support
 
-## Background images
-Place your files here:
+## Images
+- Hero: `assets/bg/hero.png`
+- Page background: `assets/bg/page-bg.jpg`
 
-- `assets/bg/hero.png` → hero banner image
-- `assets/bg/page-bg.jpg` → full page fixed background
-
-Recommended sizes:
-- Hero: `1920x720`
-- Page background: `1920x1080`
-
-## Optional icon support
-Drop PNG files into these folders:
-
+## Icons
+Put transparent PNG files here:
 - `assets/recipes/`
 - `assets/ingredients/`
 
-Use slug-style filenames, for example:
-
-- `assets/recipes/chocolate-cake.png`
-- `assets/ingredients/sugar-cubes.png`
-- `assets/ingredients/raw-chicken.png`
-
-Recommended icon size:
-- `128x128 PNG` with transparent background
-
-If no icon exists, the tool falls back to initials automatically.
-
-## Credits
-Created and maintained by **fernandobacate**.
+Recommended icon size: **128x128** PNG.

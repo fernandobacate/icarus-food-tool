@@ -1,3 +1,4 @@
+
 const state = {
   data: null,
   foods: [],
@@ -5,12 +6,8 @@ const state = {
   calculated: false,
   calculatedFoods: [],
   currentPreset: null,
-  activeAutocomplete: null,
-  currentBuildToken: null,
+  activeAutocompleteIndex: null,
 };
-
-const isEmbed = new URLSearchParams(window.location.search).has("embed");
-if (isEmbed) document.body.classList.add("embed-mode");
 
 const kpiGridEl = document.getElementById("kpiGrid");
 const selectorsEl = document.getElementById("selectors");
@@ -25,7 +22,6 @@ const shoppingWrapEl = document.getElementById("shoppingWrap");
 const rankingsWrapEl = document.getElementById("rankingsWrap");
 const footerMetaEl = document.getElementById("footerMeta");
 const presetButtonsEl = document.getElementById("presetButtons");
-const captureAreaEl = document.getElementById("captureArea");
 
 const benchFilterEl = document.getElementById("benchFilter");
 const sortFoodsEl = document.getElementById("sortFoods");
@@ -33,24 +29,76 @@ const rankingLimitEl = document.getElementById("rankingLimit");
 const hideZeroBuffsEl = document.getElementById("hideZeroBuffs");
 const sortBuffsEl = document.getElementById("sortBuffs");
 const strictModeEl = document.getElementById("strictMode");
+const ignoreConsumeStatsEl = document.getElementById("ignoreConsumeStats");
 const calculateBtn = document.getElementById("calculateBtn");
 const clearBtn = document.getElementById("clearBtn");
 const randomBuildBtn = document.getElementById("randomBuildBtn");
-const optimalBuildBtn = document.getElementById("optimalBuildBtn");
 const copySummaryBtn = document.getElementById("copySummaryBtn");
 const copyShoppingBtn = document.getElementById("copyShoppingBtn");
-const copyLinkBtn = document.getElementById("copyLinkBtn");
-const exportImageBtn = document.getElementById("exportImageBtn");
 
-const BUFF_DIMS = [
+const SCORE_DIMS = [
   ["survival", "Survival"],
-  ["combat", "Combat"],
+  ["melee", "Melee"],
+  ["ranged", "Ranged"],
   ["exploration", "Exploration"],
-  ["xp_support", "XP / Support"],
+  ["support", "Support"],
   ["utility", "Utility"],
   ["overall", "Overall"],
   ["efficiency", "Efficiency"],
 ];
+
+const IGNORE_FOR_SCORING = new Set(["Food_On_Consume", "Water_On_Consume"]);
+
+const CATEGORY_WEIGHTS = {
+  survival: [
+    [/Max_Health/i, 1],
+    [/Health_Regen/i, 1.8],
+    [/Max_Stamina/i, 0.45],
+    [/Stamina_Regen/i, 0.6],
+    [/Exposure_Resistance/i, 1.4],
+    [/Cold_Resistance|Heat_Resistance/i, 1.1],
+    [/Food_Consumption|Water_Consumption|Oxygen_Consumption/i, 0.9],
+    [/Melee_Resistance/i, 1.2],
+    [/Food_Effects_Duration/i, 0.5],
+    [/Temperature/i, 0.2],
+  ],
+  melee: [
+    [/Melee_Damage/i, 2.2],
+    [/Melee_Attack_Speed/i, 2],
+    [/Return_Melee_Damage_pct/i, 0.9],
+    [/Return_Melee_Damage_Chance_pct/i, 0.8],
+    [/Melee_Resistance/i, 1.3],
+  ],
+  ranged: [
+    [/Projectile_Damage/i, 2.2],
+    [/Charge_Speed/i, 1.6],
+    [/Reload_Speed/i, 1.6],
+    [/Crit_Damage/i, 1.6],
+  ],
+  exploration: [
+    [/Oxygen_Consumption/i, 1.8],
+    [/Water_Consumption/i, 1.4],
+    [/Exposure_Resistance/i, 1.2],
+    [/Resist_Cave_Sickness/i, 1.7],
+    [/Yield_Foraging/i, 1.1],
+    [/Extra_Stone_Chance/i, 0.6],
+    [/Nearby_Juveniles_Tame_Faster/i, 1.2],
+    [/Temperature/i, 0.35],
+  ],
+  support: [
+    [/XP_Gained/i, 1.7],
+    [/Shared_XP_Gained/i, 2.1],
+    [/Tamed_Creature_XP/i, 1.4],
+  ],
+  utility: [
+    [/Crafting_Speed/i, 2.2],
+    [/Stamina_Used_By|Stamina_Consumed_By/i, 1.8],
+    [/Food_Effects_Duration/i, 1.5],
+    [/Yield_Butchering/i, 1.1],
+    [/Perceived_Threat/i, 0.5],
+    [/Food_Consumption/i, 0.8],
+  ],
+};
 
 function fmtNumber(value, digits = 0) {
   return new Intl.NumberFormat("en-US", {
@@ -89,32 +137,32 @@ function iconMarkup(name, type = "recipes", className = "icon-wrap") {
   `;
 }
 
+function scoreFood(food) {
+  const dims = { survival: 0, melee: 0, ranged: 0, exploration: 0, support: 0, utility: 0 };
+  for (const [key, meta] of Object.entries(food.buffs || {})) {
+    if (ignoreConsumeStatsEl.checked && IGNORE_FOR_SCORING.has(key)) continue;
+    const value = Number(meta.value || 0);
+    for (const [dim, rules] of Object.entries(CATEGORY_WEIGHTS)) {
+      for (const [regex, weight] of rules) {
+        if (regex.test(key)) dims[dim] += Math.abs(value) * weight;
+      }
+    }
+  }
+  dims.overall = dims.survival + dims.melee + dims.ranged + dims.exploration + dims.support + dims.utility;
+  const ingredientCount = Math.max(1, Number(food.ingredient_count || (food.ingredients || []).length || 1));
+  dims.efficiency = dims.overall / ingredientCount;
+  return dims;
+}
+
+function deriveScoredFood(food) {
+  return { ...food, derivedScores: scoreFood(food) };
+}
+
 function bySelectedSort(a, b, mode) {
   if (mode === "name") return a.name.localeCompare(b.name);
-  return (b.scores?.[mode] || 0) - (a.scores?.[mode] || 0) || a.name.localeCompare(b.name);
-}
-
-function getBuildQueryPayload(selectedFoods) {
-  return selectedFoods.map(food => `${encodeURIComponent(food.name)}~${encodeURIComponent(String(food.craftQty || 1))}`).join("|");
-}
-
-function parseBuildQueryPayload(raw) {
-  if (!raw) return [];
-  return raw.split("|").map(part => {
-    const [namePart, qtyPart] = part.split("~");
-    return {
-      name: decodeURIComponent(namePart || ""),
-      qty: Math.max(1, Number(decodeURIComponent(qtyPart || "1")) || 1),
-    };
-  }).filter(item => item.name);
-}
-
-function updateUrlForBuild(selectedFoods) {
-  const params = new URLSearchParams(window.location.search);
-  if (selectedFoods?.length) params.set("build", getBuildQueryPayload(selectedFoods));
-  else params.delete("build");
-  const suffix = params.toString() ? `?${params.toString()}` : "";
-  history.replaceState({}, "", `${window.location.pathname}${suffix}`);
+  const aScore = (a.derivedScores || {})[mode] || 0;
+  const bScore = (b.derivedScores || {})[mode] || 0;
+  return bScore - aScore || a.name.localeCompare(b.name);
 }
 
 function getDraftSelection() {
@@ -129,6 +177,18 @@ function getDraftSelection() {
     draft.push({ ...exact, craftQty: qty });
   }
   return draft;
+}
+
+function duplicateModifiers(selectedFoods) {
+  const owners = {};
+  selectedFoods.forEach(food => {
+    const key = String(food.modifier || food.name || "").trim().toLowerCase();
+    owners[key] ||= [];
+    owners[key].push(food.name);
+  });
+  return Object.entries(owners)
+    .filter(([, names]) => names.length > 1)
+    .map(([modifier, names]) => ({ modifier, names }));
 }
 
 function getAllBuffKeys(selectedFoods) {
@@ -149,17 +209,6 @@ function sumBuffs(selectedFoods) {
   return totals;
 }
 
-function detectDuplicateBuffs(selectedFoods) {
-  const owners = {};
-  selectedFoods.forEach(food => {
-    Object.keys(food.buffs || {}).forEach(key => {
-      owners[key] ||= [];
-      owners[key].push(food.name);
-    });
-  });
-  return Object.entries(owners).filter(([, names]) => names.length > 1).map(([key, names]) => ({ key, names }));
-}
-
 function aggregateIngredients(selectedFoods) {
   const map = new Map();
   selectedFoods.forEach(food => {
@@ -176,25 +225,26 @@ function aggregateIngredients(selectedFoods) {
 }
 
 function presetsForFoods(foods) {
-  const topBy = (key, limit = 5) => [...foods].sort((a, b) => (b.scores?.[key] || 0) - (a.scores?.[key] || 0)).slice(0, limit).map(f => f.name);
+  const topBy = (key, limit = 5) => [...foods].sort((a, b) => (b.derivedScores?.[key] || 0) - (a.derivedScores?.[key] || 0)).slice(0, limit).map(f => f.name);
   return [
-    { id: "allround", label: "All-round", names: (state.data.meta.top_overall || []).slice(0, 5).map(x => x.name) },
+    { id: "allround", label: "All-round", names: topBy("overall") },
     { id: "survival", label: "Survival Tank", names: topBy("survival") },
-    { id: "combat", label: "Combat Focus", names: topBy("combat") },
+    { id: "melee", label: "Melee Focus", names: topBy("melee") },
+    { id: "ranged", label: "Ranged Focus", names: topBy("ranged") },
     { id: "explore", label: "Exploration Rush", names: topBy("exploration") },
-    { id: "xpsupport", label: "XP / Support", names: topBy("xp_support") },
+    { id: "support", label: "XP / Support", names: topBy("support") },
     { id: "efficiency", label: "Efficiency", names: topBy("efficiency") },
   ];
 }
 
 function renderKPIs() {
   const meta = state.data.meta;
-  const top = meta.top_overall?.[0];
+  const top = [...state.foods].sort((a,b)=>(b.derivedScores?.overall||0)-(a.derivedScores?.overall||0))[0];
   const kpis = [
     { label: "Total recipes", value: fmtNumber(meta.total_recipes), sub: "Complete dataset loaded" },
     { label: "Ingredient rows", value: fmtNumber(meta.total_ingredient_rows), sub: "Shopping list ready" },
-    { label: "Best overall", value: top?.name || "—", sub: top ? `${fmtMaybe(top.score)} • ${top.bench}` : "" },
-    { label: "Smoker recipes", value: fmtNumber(meta.benches?.Smoker || 0), sub: "Carnivore-aware foods included" },
+    { label: "Best overall", value: top?.name || "—", sub: top ? `${fmtMaybe(top.derivedScores?.overall)} • ${top.bench}` : "" },
+    { label: "Smoker recipes", value: fmtNumber(meta.benches?.Smoker || 0), sub: "Transparent scoring enabled" },
   ];
   kpiGridEl.innerHTML = kpis.map(k => `<article class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div><div class="kpi-sub">${k.sub}</div></article>`).join("");
 }
@@ -220,94 +270,59 @@ function autocompleteItemMarkup(food) {
       </div>
       <div class="autocomplete-score">
         <div><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span></div>
-        <div style="margin-top:6px">Overall ${fmtMaybe(food.scores?.overall)}</div>
+        <div style="margin-top:6px">Overall ${fmtMaybe(food.derivedScores?.overall)}</div>
       </div>
     </div>
   `;
 }
 
-function closeAllAutocomplete(exceptIndex = null) {
-  document.querySelectorAll('.autocomplete-list').forEach((list) => {
-    const idx = Number(list.dataset.index);
-    const shouldClose = exceptIndex == null || idx !== exceptIndex;
-    if (shouldClose) list.classList.add('hidden');
-  });
-  document.querySelectorAll('.slot').forEach(slot => slot.classList.remove('active-slot'));
-  if (exceptIndex == null) state.activeAutocomplete = null;
+function closeAllAutocompletes() {
+  document.querySelectorAll('.autocomplete-list').forEach(el => el.classList.add('hidden'));
+  state.activeAutocompleteIndex = null;
 }
 
-function renderAutocompleteList(index, matches, activeIndex = 0) {
+function renderAutocompleteList(index, foods, activeIdx = -1) {
   const listEl = document.getElementById(`autocomplete-${index}`);
   if (!listEl) return;
-  if (!matches.length) {
-    listEl.innerHTML = `<div class="autocomplete-item active"><div class="ingredient-mini"><span class="icon-fallback">—</span></div><div class="autocomplete-main"><div class="autocomplete-name">No matches found</div><div class="autocomplete-meta">Try another search term.</div></div><div class="autocomplete-score"></div></div>`;
+  if (!foods.length) {
+    listEl.innerHTML = `<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No matches</div></div></div>`;
     listEl.classList.remove('hidden');
     return;
   }
-  listEl.innerHTML = matches.slice(0, 50).map((food, idx) => {
-    const markup = autocompleteItemMarkup(food);
-    return markup.replace('autocomplete-item', `autocomplete-item${idx === activeIndex ? ' active' : ''}`);
-  }).join('');
+  listEl.innerHTML = foods.slice(0, 40).map((food, i) => `<div class="${i===activeIdx?'autocomplete-item active':'autocomplete-item'}" data-name="${food.name.replace(/"/g, '&quot;')}">${autocompleteItemMarkup(food).replace('<div class="autocomplete-item" data-name="'+food.name.replace(/"/g,'&quot;')+'">','').replace(/<\/div>$/,'')}</div>`).join('');
   listEl.classList.remove('hidden');
-
-  listEl.querySelectorAll('.autocomplete-item[data-name]').forEach(item => {
+  listEl.querySelectorAll('.autocomplete-item').forEach(item => {
     item.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      selectFood(index, item.dataset.name);
+      selectAutocomplete(index, item.dataset.name);
     });
   });
 }
 
-function openAutocomplete(index, term = "") {
-  applyFoodFilter();
-  const slotEl = document.getElementById(`slot-wrap-${index}`);
-  const matches = term
-    ? state.filteredFoods.filter(food => food.name.toLowerCase().includes(term.toLowerCase()))
-    : state.filteredFoods;
-  closeAllAutocomplete(index);
-  slotEl?.classList.add('active-slot');
-  renderAutocompleteList(index, matches, 0);
-  state.activeAutocomplete = { index, matches: matches.slice(0, 50), activeIndex: 0 };
-}
-
-function moveAutocomplete(index, direction) {
-  if (!state.activeAutocomplete || state.activeAutocomplete.index !== index) return;
-  const max = state.activeAutocomplete.matches.length - 1;
-  if (max < 0) return;
-  state.activeAutocomplete.activeIndex = Math.max(0, Math.min(max, state.activeAutocomplete.activeIndex + direction));
-  renderAutocompleteList(index, state.activeAutocomplete.matches, state.activeAutocomplete.activeIndex);
-}
-
-function selectFood(index, foodName) {
+function selectAutocomplete(index, name) {
   const input = document.getElementById(`slot-${index}`);
-  if (!input) return;
-  input.value = foodName;
-  closeAllAutocomplete();
+  if (input) input.value = name;
+  closeAllAutocompletes();
 }
 
-function attachAutocompleteEvents(index) {
+function setupAutocomplete(index) {
   const input = document.getElementById(`slot-${index}`);
-  if (!input) return;
-  input.addEventListener('focus', () => openAutocomplete(index, input.value.trim()));
-  input.addEventListener('click', () => openAutocomplete(index, input.value.trim()));
-  input.addEventListener('input', () => openAutocomplete(index, input.value.trim()));
+  const wrap = document.getElementById(`slot-wrap-${index}`);
+  let activeIdx = -1;
+  let currentMatches = [];
+  const refreshMatches = () => {
+    const term = (input.value || '').trim().toLowerCase();
+    currentMatches = state.filteredFoods.filter(food => !term || food.name.toLowerCase().includes(term));
+    renderAutocompleteList(index, currentMatches, activeIdx);
+  };
+  input.addEventListener('focus', () => { activeIdx = -1; refreshMatches(); state.activeAutocompleteIndex = index; });
+  input.addEventListener('input', () => { activeIdx = -1; refreshMatches(); state.activeAutocompleteIndex = index; });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      openAutocomplete(index, input.value.trim());
-      moveAutocomplete(index, 1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      openAutocomplete(index, input.value.trim());
-      moveAutocomplete(index, -1);
-    } else if (e.key === 'Enter') {
-      if (state.activeAutocomplete && state.activeAutocomplete.index === index && state.activeAutocomplete.matches[state.activeAutocomplete.activeIndex]) {
-        e.preventDefault();
-        selectFood(index, state.activeAutocomplete.matches[state.activeAutocomplete.activeIndex].name);
-      }
-    } else if (e.key === 'Escape') {
-      closeAllAutocomplete();
-    }
+    if (!currentMatches.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, currentMatches.length - 1); renderAutocompleteList(index, currentMatches, activeIdx); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); renderAutocompleteList(index, currentMatches, activeIdx); }
+    else if (e.key === 'Enter') { if (activeIdx >= 0) { e.preventDefault(); selectAutocomplete(index, currentMatches[activeIdx].name); } }
+    else if (e.key === 'Escape') { closeAllAutocompletes(); }
   });
 }
 
@@ -319,12 +334,12 @@ function renderSelectors(preserve = []) {
     const current = entry.name || "";
     const qty = entry.qty || 1;
     selectorsEl.insertAdjacentHTML("beforeend", `
-      <div class="slot" id="slot-wrap-${i}">
+      <div class="slot">
         <div class="slot-header"><strong>Slot ${i + 1}</strong><span>${current ? "Draft selected" : "Empty"}</span></div>
         <div class="slot-controls">
-          <div class="autocomplete-wrap">
-            <input class="wide-input" id="slot-${i}" placeholder="Click or type to browse recipes..." autocomplete="off" value="${current.replace(/"/g, '&quot;')}">
-            <div class="autocomplete-list hidden" id="autocomplete-${i}" data-index="${i}"></div>
+          <div class="autocomplete-wrap" id="slot-wrap-${i}">
+            <input class="wide-input" id="slot-${i}" placeholder="Click or type to browse recipes..." value="${current.replace(/"/g, '&quot;')}">
+            <div class="autocomplete-list hidden" id="autocomplete-${i}"></div>
           </div>
           <label>
             <span>Craft qty</span>
@@ -333,7 +348,7 @@ function renderSelectors(preserve = []) {
         </div>
       </div>
     `);
-    attachAutocompleteEvents(i);
+    setupAutocomplete(i);
   }
 }
 
@@ -364,7 +379,11 @@ function clearResultsOnly() {
   shoppingWrapEl.innerHTML = `<div class="empty">No ingredients to show yet.</div>`;
   state.calculated = false;
   state.calculatedFoods = [];
-  updateUrlForBuild([]);
+}
+
+function buffListMarkup(food) {
+  const buffs = Object.values(food.buffs || {}).map(meta => `${meta.label}: ${fmtMaybe(meta.value)}`);
+  return buffs.slice(0, 8).map(x => `<span class="mini-chip">${x}</span>`).join('');
 }
 
 function renderSelectedCards(selectedFoods) {
@@ -381,16 +400,17 @@ function renderSelectedCards(selectedFoods) {
           </div>
         </div>
       </div>
-      <div class="small-muted">Overall ${fmtMaybe(food.scores?.overall)} • Efficiency ${fmtMaybe(food.scores?.efficiency)}</div>
+      <div class="small-muted">Overall ${fmtMaybe(food.derivedScores?.overall)} • Efficiency ${fmtMaybe(food.derivedScores?.efficiency)}</div>
       <div class="recipe-qty">Craft quantity: x${fmtMaybe(food.craftQty)}</div>
       ${food.notes ? `<div class="small-muted">${food.notes}</div>` : `<div class="small-muted">Modifier: ${food.modifier || food.name}</div>`}
+      <div class="buff-list">${buffListMarkup(food)}</div>
     </article>
   `).join("");
 
-  const duplicates = detectDuplicateBuffs(selectedFoods);
+  const duplicates = duplicateModifiers(selectedFoods);
   if (duplicates.length) {
     buffWarningEl.hidden = false;
-    buffWarningEl.innerHTML = `<strong>Potential in-game overlap:</strong> ${duplicates.slice(0, 6).map(d => `${(selectedFoods.find(f => f.buffs?.[d.key])?.buffs?.[d.key]?.label || d.key)} (${d.names.length} foods)`).join(" • ")}`;
+    buffWarningEl.innerHTML = `<strong>Strict-mode conflict:</strong> duplicate modifier/status effect detected for ${duplicates.map(d => d.names.join(' + ')).join(' • ')}`;
   } else {
     buffWarningEl.hidden = true;
   }
@@ -406,10 +426,12 @@ function renderCombinedBuffs(selectedFoods) {
 }
 
 function renderScores(selectedFoods) {
-  const totals = Object.fromEntries(BUFF_DIMS.map(([key]) => [key, 0]));
-  selectedFoods.forEach(food => BUFF_DIMS.forEach(([key]) => totals[key] += Number(food.scores?.[key] || 0)));
-  scoreCardsEl.innerHTML = BUFF_DIMS.map(([key, label]) => `<article class="score-card"><div class="score-name">${label}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join("");
-  const sorted = [...BUFF_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).map(([key, label]) => ({ key, label, value: totals[key] }));
+  const totals = Object.fromEntries(SCORE_DIMS.map(([key]) => [key, 0]));
+  selectedFoods.forEach(food => {
+    Object.entries(food.derivedScores || {}).forEach(([key, value]) => { if (totals[key] != null) totals[key] += Number(value || 0); });
+  });
+  scoreCardsEl.innerHTML = SCORE_DIMS.map(([key, label]) => `<article class="score-card"><div class="score-name">${label}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join("");
+  const sorted = [...SCORE_DIMS].filter(([k]) => !['overall','efficiency'].includes(k)).sort((a,b)=>totals[b[0]]-totals[a[0]]).map(([key,label])=>({key,label,value:totals[key]}));
   const topBench = Object.entries(selectedFoods.reduce((acc, food) => { acc[food.bench] = (acc[food.bench] || 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1])[0];
   buildInsightsEl.innerHTML = `
     <div class="insight"><strong>Primary archetype:</strong> ${sorted[0].label} (${fmtMaybe(sorted[0].value)})</div>
@@ -431,34 +453,32 @@ function renderShopping(selectedFoods) {
 
 function renderRankings() {
   const limit = Number(rankingLimitEl.value || 20);
-  const rows = [...state.foods].sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0)).slice(0, limit);
-  rankingsWrapEl.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr><th>#</th><th>Recipe</th><th>Bench</th><th>Tier</th><th class="number">Overall</th><th class="number">Efficiency</th><th class="number">Survival</th><th class="number">Combat</th><th class="number">Exploration</th></tr></thead><tbody>${rows.map((food, idx) => `
+  const rows = [...state.foods].sort((a, b) => (b.derivedScores?.overall || 0) - (a.derivedScores?.overall || 0)).slice(0, limit);
+  rankingsWrapEl.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr><th>#</th><th>Recipe</th><th>Bench</th><th>Tier</th><th class="number">Overall</th><th class="number">Efficiency</th><th class="number">Survival</th><th class="number">Melee</th><th class="number">Ranged</th><th class="number">Exploration</th></tr></thead><tbody>${rows.map((food, idx) => `
     <tr>
       <td class="rank-cell">${idx + 1}</td>
       <td><div class="recipe-cell">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div></td>
       <td>${food.bench}</td>
       <td><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'}</span></td>
-      <td class="number">${fmtMaybe(food.scores?.overall)}</td>
-      <td class="number">${fmtMaybe(food.scores?.efficiency)}</td>
-      <td class="number">${fmtMaybe(food.scores?.survival)}</td>
-      <td class="number">${fmtMaybe(food.scores?.combat)}</td>
-      <td class="number">${fmtMaybe(food.scores?.exploration)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.overall)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.efficiency)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.survival)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.melee)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.ranged)}</td>
+      <td class="number">${fmtMaybe(food.derivedScores?.exploration)}</td>
     </tr>`).join("")}</tbody></table></div>`;
 }
 
 function buildSummaryText(selectedFoods) {
-  const totals = Object.fromEntries(BUFF_DIMS.map(([key]) => [key, 0]));
-  selectedFoods.forEach(food => BUFF_DIMS.forEach(([key]) => totals[key] += Number(food.scores?.[key] || 0)));
-  const archetypes = [...BUFF_DIMS]
-    .sort((a, b) => totals[b[0]] - totals[a[0]])
-    .slice(0, 3)
-    .map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
-
+  const totals = Object.fromEntries(SCORE_DIMS.map(([key]) => [key, 0]));
+  selectedFoods.forEach(food => SCORE_DIMS.forEach(([key]) => totals[key] += Number(food.derivedScores?.[key] || 0)));
+  const archetypes = [...SCORE_DIMS].filter(([k]) => !['overall','efficiency'].includes(k)).sort((a, b) => totals[b[0]] - totals[a[0]]).slice(0, 3).map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
   return [
     `Icarus Food Calculator — Build Summary`,
     `Created by fernandobacate`,
+    `Transparent scoring: Survival / Melee / Ranged / Exploration / Support / Utility`,
     "",
-    ...selectedFoods.map((food, idx) => `${idx + 1}. ${food.name} x${fmtMaybe(food.craftQty)} — ${food.bench} — Overall ${fmtMaybe(food.scores?.overall)}`),
+    ...selectedFoods.map((food, idx) => `${idx + 1}. ${food.name} x${fmtMaybe(food.craftQty)} — ${food.bench} — Overall ${fmtMaybe(food.derivedScores?.overall)}`),
     "",
     `Top dimensions: ${archetypes.join(' • ')}`
   ].join("\n");
@@ -483,18 +503,15 @@ async function copyText(text, successLabel, fallbackLabel) {
   }
 }
 
-function validStrictBuild(selectedFoods) {
-  return detectDuplicateBuffs(selectedFoods).length === 0;
-}
-
 function calculateAll() {
   const selectedFoods = getDraftSelection();
   if (!selectedFoods.length) {
     clearResultsOnly();
     return;
   }
-  if (strictModeEl.checked && !validStrictBuild(selectedFoods)) {
-    alert('This build has duplicate buff categories. Disable strict in-game mode or change your selection.');
+  const dupes = duplicateModifiers(selectedFoods);
+  if (strictModeEl.checked && dupes.length) {
+    alert(`Strict mode: duplicate status effect/modifier found.\n\n${dupes.map(d => d.names.join(' + ')).join('\n')}`);
     return;
   }
   state.calculated = true;
@@ -504,7 +521,6 @@ function calculateAll() {
   renderCombinedBuffs(selectedFoods);
   renderScores(selectedFoods);
   renderShopping(selectedFoods);
-  updateUrlForBuild(selectedFoods);
 }
 
 function clearAll() {
@@ -512,11 +528,10 @@ function clearAll() {
   renderPresets();
   renderSelectors(Array.from({ length: 5 }, () => ({ name: "", qty: 1 })));
   clearResultsOnly();
-  closeAllAutocomplete();
 }
 
 function fillRandomBuild() {
-  const pool = [...state.foods].sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0)).slice(0, 25);
+  const pool = [...state.foods].sort((a, b) => (b.derivedScores?.overall || 0) - (a.derivedScores?.overall || 0)).slice(0, 25);
   const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
   const preserve = shuffled.map(food => ({ name: food.name, qty: 1 }));
   state.currentPreset = null;
@@ -525,91 +540,41 @@ function fillRandomBuild() {
   calculateAll();
 }
 
-function generateOptimalBuild() {
-  const pool = [...state.foods].sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0));
-  const picked = [];
-  for (const food of pool) {
-    const candidate = [...picked, { ...food, craftQty: 1 }];
-    if (!strictModeEl.checked || validStrictBuild(candidate)) picked.push(food);
-    if (picked.length === 5) break;
-  }
-  const preserve = picked.slice(0, 5).map(food => ({ name: food.name, qty: 1 }));
-  state.currentPreset = null;
-  renderPresets();
-  renderSelectors(preserve);
-  calculateAll();
-}
-
-function generateShareURL() {
-  const params = new URLSearchParams(window.location.search);
-  if (!state.calculatedFoods.length) return `${window.location.origin}${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
-  params.set('build', getBuildQueryPayload(state.calculatedFoods));
-  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-}
-
-async function exportCurrentBuildAsImage() {
-  if (!state.calculatedFoods.length) {
-    alert('Calculate a build first.');
-    return;
-  }
-  if (typeof html2canvas === 'undefined') {
-    alert('Export library failed to load.');
-    return;
-  }
-  const canvas = await html2canvas(captureAreaEl, {
-    backgroundColor: '#0a0c11',
-    scale: 2,
-    useCORS: true,
-    logging: false,
-    scrollY: -window.scrollY,
-  });
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL('image/png');
-  link.download = 'icarus-food-build.png';
-  link.click();
-}
-
-function restoreBuildFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const payload = parseBuildQueryPayload(params.get('build'));
-  if (!payload.length) return false;
-  const preserve = Array.from({ length: 5 }, (_, i) => ({ name: payload[i]?.name || '', qty: payload[i]?.qty || 1 }));
-  renderSelectors(preserve);
-  calculateAll();
-  return true;
-}
-
 async function loadFoods() {
   const response = await fetch('./foods.json');
   state.data = await response.json();
-  state.foods = state.data.foods;
+  state.foods = state.data.foods.map(deriveScoredFood);
   renderKPIs();
   renderFilters();
   renderPresets();
   renderSelectors(Array.from({ length: 5 }, () => ({ name: "", qty: 1 })));
   renderRankings();
   clearResultsOnly();
-  footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • custom autocomplete • strict mode • shareable links`;
-  restoreBuildFromUrl();
+  footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • transparent scoring • melee/ranged split`; 
 }
 
 benchFilterEl.addEventListener('change', () => {
   const preserve = Array.from({ length: 5 }, (_, i) => ({ name: document.getElementById(`slot-${i}`)?.value || "", qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1) }));
   renderSelectors(preserve);
-  closeAllAutocomplete();
 });
 sortFoodsEl.addEventListener('change', () => {
   const preserve = Array.from({ length: 5 }, (_, i) => ({ name: document.getElementById(`slot-${i}`)?.value || "", qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1) }));
   renderSelectors(preserve);
-  closeAllAutocomplete();
 });
 rankingLimitEl.addEventListener('change', renderRankings);
 hideZeroBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(state.calculatedFoods));
 sortBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(state.calculatedFoods));
+ignoreConsumeStatsEl.addEventListener('change', () => {
+  state.foods = state.data.foods.map(deriveScoredFood);
+  renderKPIs(); renderPresets(); renderRankings();
+  if (state.calculated) {
+    state.calculatedFoods = state.calculatedFoods.map(food => ({ ...state.foods.find(f => f.name === food.name), craftQty: food.craftQty }));
+    renderSelectedCards(state.calculatedFoods); renderScores(state.calculatedFoods);
+  }
+});
 calculateBtn.addEventListener('click', calculateAll);
 clearBtn.addEventListener('click', clearAll);
 randomBuildBtn.addEventListener('click', fillRandomBuild);
-optimalBuildBtn.addEventListener('click', generateOptimalBuild);
 copySummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(buildSummaryText(state.calculatedFoods), () => { copySummaryBtn.textContent = 'Summary copied'; setTimeout(() => copySummaryBtn.textContent = 'Copy build summary', 1400); }, 'Clipboard blocked. Copy manually:');
@@ -618,18 +583,6 @@ copyShoppingBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(shoppingText(state.calculatedFoods), () => { copyShoppingBtn.textContent = 'Shopping copied'; setTimeout(() => copyShoppingBtn.textContent = 'Copy shopping list', 1400); }, 'Clipboard blocked. Copy manually:');
 });
-copyLinkBtn.addEventListener('click', () => {
-  if (!state.calculatedFoods.length) return alert('Calculate a build first.');
-  copyText(generateShareURL(), () => { copyLinkBtn.textContent = 'Build link copied'; setTimeout(() => copyLinkBtn.textContent = 'Copy build link', 1400); }, 'Clipboard blocked. Copy manually:');
-});
-exportImageBtn.addEventListener('click', exportCurrentBuildAsImage);
-
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.autocomplete-wrap')) closeAllAutocomplete();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeAllAutocomplete();
-});
+document.addEventListener('click', (e) => { if (!e.target.closest('.autocomplete-wrap')) closeAllAutocompletes(); });
 
 loadFoods();
