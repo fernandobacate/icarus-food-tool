@@ -7,6 +7,8 @@ const state = {
   calculatedFoods: [],
   currentPreset: null,
   activeAutocomplete: null,
+  rankSortKey: 'overall',
+  rankSortDir: 'desc',
 };
 
 const els = {
@@ -52,6 +54,17 @@ const CATEGORY_LABELS = {
 const CATEGORY_COLORS = {
   survival:"survival", melee:"melee", ranged:"ranged",
   exploration:"exploration", xp_support:"xp_support", utility:"utility"
+};
+
+const CATEGORY_ICONS = {
+  survival: "🛡️",
+  melee: "🗡️",
+  ranged: "🏹",
+  exploration: "🧭",
+  xp_support: "⭐",
+  utility: "🧰",
+  overall: "📊",
+  efficiency: "⚙️"
 };
 
 function fmtNumber(value, digits = 0) {
@@ -388,6 +401,7 @@ function foodOnConsumeDisplay(total) {
   if (total > 300) return '300+ (maxed)';
   return fmtMaybe(total);
 }
+
 function renderCombinedBuffs(activeFoods) {
   const totals = sumBuffs(activeFoods);
   let rows = Object.entries(totals).map(([label, value]) => ({label, value, cat: categorizeBuffLabel(label)}));
@@ -401,17 +415,18 @@ function renderCombinedBuffs(activeFoods) {
   els.buffCategoryWrap.innerHTML = CATEGORY_ORDER.map(cat => {
     const list = grouped[cat];
     if (!list.length) return '';
-    const chips = list.slice(0,4).map(row => {
-      const valueText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
-      return `<span class="chip">${row.label}: ${valueText}</span>`;
-    }).join('');
     const tableRows = list.map(row => {
       const valueText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
       return `<tr><td>${row.label}</td><td class="number">${valueText}</td></tr>`;
     }).join('');
     return `<section class="buff-category ${CATEGORY_COLORS[cat]}">
-      <h3>${CATEGORY_LABELS[cat]}</h3>
-      <div class="buff-chips">${chips}</div>
+      <div class="category-head">
+        <div class="category-icon">${CATEGORY_ICONS[cat] || '•'}</div>
+        <div>
+          <h3>${CATEGORY_LABELS[cat]}</h3>
+          <div class="category-sub">${list.length} active buff${list.length === 1 ? '' : 's'}</div>
+        </div>
+      </div>
       <div class="table-wrap"><table><thead><tr><th>Buff</th><th class="number">Total</th></tr></thead><tbody>${tableRows}</tbody></table></div>
     </section>`;
   }).join('');
@@ -474,13 +489,20 @@ function renderSelectedCards(selectedFoods, activeFoods) {
     els.buffWarning.hidden = true;
   }
 }
+
 function renderScores(activeFoods) {
   const totals = {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0};
   activeFoods.forEach(food => {
     for (const key of Object.keys(totals)) totals[key] += Number(food.computedScores[key] || 0);
   });
   els.scoreCards.innerHTML = ["survival","melee","ranged","exploration","xp_support","utility","overall","efficiency"].map(key=>`
-    <article class="score-card"><div class="score-name">${CATEGORY_LABELS[key]}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join('');
+    <article class="score-card ${key}">
+      <div class="score-top">
+        <div class="score-icon">${CATEGORY_ICONS[key] || "•"}</div>
+        <div class="score-name">${CATEGORY_LABELS[key]}</div>
+      </div>
+      <div class="score-value">${fmtMaybe(totals[key])}</div>
+    </article>`).join('');
   const topTwo = Object.entries(totals).filter(([k])=>!['overall','efficiency'].includes(k)).sort((a,b)=>b[1]-a[1]).slice(0,2);
   const benchCounts = activeFoods.reduce((acc,f)=>{acc[f.bench]=(acc[f.bench]||0)+1; return acc;},{});
   const topBench = Object.entries(benchCounts).sort((a,b)=>b[1]-a[1])[0];
@@ -501,6 +523,7 @@ function clearResultsOnly() {
   state.calculated = false;
   state.calculatedFoods = [];
 }
+
 function calculateAll() {
   const selectedFoods = getDraftSelection();
   if (!selectedFoods.length) { clearResultsOnly(); return; }
@@ -512,6 +535,7 @@ function calculateAll() {
   renderCombinedBuffs(activeFoods);
   renderScores(activeFoods);
   renderShopping(selectedFoods);
+  document.getElementById('selectedFoodsPanel')?.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // ---------- KPIs / rankings ----------
@@ -526,10 +550,46 @@ function renderKPIs() {
   ];
   els.kpiGrid.innerHTML = kpis.map(k=>`<article class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div><div class="kpi-sub">${k.sub}</div></article>`).join('');
 }
+
+function rankValue(food, key) {
+  if (key === 'name') return food.name;
+  if (key === 'bench') return food.bench;
+  if (key === 'tier') return food.tier || '';
+  return food.computedScores?.[key] ?? 0;
+}
+function sortRankRows(rows) {
+  const key = state.rankSortKey || 'overall';
+  const dir = state.rankSortDir || 'desc';
+  return rows.sort((a,b) => {
+    const va = rankValue(a, key);
+    const vb = rankValue(b, key);
+    let cmp = 0;
+    if (typeof va === 'string' || typeof vb === 'string') cmp = String(va).localeCompare(String(vb));
+    else cmp = Number(va) - Number(vb);
+    if (cmp === 0) cmp = a.name.localeCompare(b.name);
+    return dir === 'asc' ? cmp : -cmp;
+  });
+}
+function rankHeader(label, key, numeric=false) {
+  const active = state.rankSortKey === key;
+  const arrow = active ? (state.rankSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  return `<th class="${numeric ? 'number' : ''}"><button class="rank-sort-btn ${active ? 'active' : ''}" data-sort="${key}">${label}${arrow}</button></th>`;
+}
 function renderRankings() {
   const limit = Number(els.rankingLimit.value || 20);
-  const rows = [...allAdjustedFoods()].sort((a,b)=>b.computedScores.overall - a.computedScores.overall).slice(0, limit);
-  els.rankingsWrap.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr><th>#</th><th>Recipe</th><th>Bench</th><th>Tier</th><th class="number">Overall</th><th class="number">Efficiency</th><th class="number">Survival</th><th class="number">Melee</th><th class="number">Ranged</th><th class="number">Exploration</th></tr></thead><tbody>${rows.map((food, idx)=>`
+  const rows = sortRankRows([...allAdjustedFoods()]).slice(0, limit);
+  els.rankingsWrap.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr>
+    ${rankHeader('#','rank',true)}
+    ${rankHeader('Recipe','name')}
+    ${rankHeader('Bench','bench')}
+    ${rankHeader('Tier','tier')}
+    ${rankHeader('Overall','overall',true)}
+    ${rankHeader('Efficiency','efficiency',true)}
+    ${rankHeader('Survival','survival',true)}
+    ${rankHeader('Melee','melee',true)}
+    ${rankHeader('Ranged','ranged',true)}
+    ${rankHeader('Exploration','exploration',true)}
+  </tr></thead><tbody>${rows.map((food, idx)=>`
     <tr><td class="rank-cell">${idx+1}</td>
     <td><div class="recipe-cell">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div></td>
     <td>${food.bench}</td>
@@ -541,6 +601,21 @@ function renderRankings() {
     <td class="number">${fmtMaybe(food.computedScores.ranged)}</td>
     <td class="number">${fmtMaybe(food.computedScores.exploration)}</td>
     </tr>`).join('')}</tbody></table></div>`;
+  els.rankingsWrap.querySelectorAll('.rank-sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sort;
+      if (key === 'rank') {
+        state.rankSortKey = 'overall';
+        state.rankSortDir = 'desc';
+      } else if (state.rankSortKey === key) {
+        state.rankSortDir = state.rankSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.rankSortKey = key;
+        state.rankSortDir = ['name','bench','tier'].includes(key) ? 'asc' : 'desc';
+      }
+      renderRankings();
+    });
+  });
 }
 
 // ---------- Generator ----------
