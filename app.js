@@ -823,10 +823,13 @@ function fillRoundRect(ctx, x, y, w, h, r, fill, stroke=null) {
   if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
 }
 function drawText(ctx, text, x, y, options={}) {
+  ctx.save();
   ctx.fillStyle = options.color || '#f3f6fb';
   ctx.font = options.font || '24px Inter, Arial, sans-serif';
   ctx.textBaseline = options.baseline || 'alphabetic';
+  ctx.textAlign = options.align || 'left';
   ctx.fillText(text, x, y);
+  ctx.restore();
 }
 function wrapLines(ctx, text, maxWidth) {
   const words = String(text).split(/\s+/);
@@ -985,7 +988,7 @@ async function exportBuildAsPng() {
     fillRoundRect(ctx, boxX, boxY, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
     await drawCategoryIconOrFallback(ctx, item[0], boxX + 12, boxY + 16, 24);
     drawText(ctx, item[1], boxX + 44, boxY + 24, {font:'17px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(item[2]), boxX + 14, boxY + 58, {font:'bold 24px Inter, Arial, sans-serif'});
+    drawText(ctx, fmtMaybe(item[2]), boxX + bw - 14, boxY + 58, {font:'bold 24px Inter, Arial, sans-serif', align:'right'});
   }
 
   // Shopping list
