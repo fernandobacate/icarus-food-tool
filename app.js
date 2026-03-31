@@ -561,40 +561,29 @@ function styleScore(food, archetype, style) {
   if (style === 'practical') return target + food.computedScores.efficiency * 10 - complexity * 5 - benchOrder(food.bench) * 2;
   return target * 1.15 + food.computedScores.overall * 0.18 - complexity * 1.5;
 }
-
 function generateBuild(style, archetype, priorBuilds=[]) {
   const slotCap = Math.max(1, selectedSlotCount() || 5);
   const foods = candidatePool(allAdjustedFoods(), style);
   const previousNames = new Set(priorBuilds.flat().map(f=>f.name));
   const previousFamilies = new Set(priorBuilds.flat().map(effectFamily));
   const sorted = [...foods].sort((a,b)=>styleScore(b, archetype, style)-styleScore(a, archetype, style));
-
   const build = [];
   const usedFamilies = new Set();
   const usedNames = new Set();
 
-  function tryAdd(food, allowPreviouslyUsed=false) {
-    if (!food) return false;
-    const fam = effectFamily(food);
-    if (usedFamilies.has(fam) || usedNames.has(food.name)) return false;
-    if (!allowPreviouslyUsed && (previousFamilies.has(fam) || previousNames.has(food.name))) return false;
-    build.push(food);
-    usedFamilies.add(fam);
-    usedNames.add(food.name);
-    return true;
-  }
-
-  // pass 1: best candidates while avoiding previous build families/names
   for (const food of sorted) {
-    tryAdd(food, false);
-    if (build.length >= slotCap) break;
+    const fam = effectFamily(food);
+    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
+    const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
+    if (shouldAvoid) continue;
+    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
+    if (build.length === slotCap) break;
   }
-  // pass 2: if not enough, allow previous styles but still keep uniqueness in this build
-  if (build.length < slotCap) {
-    for (const food of sorted) {
-      tryAdd(food, true);
-      if (build.length >= slotCap) break;
-    }
+  for (const food of sorted) {
+    const fam = effectFamily(food);
+    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
+    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
+    if (build.length === slotCap) break;
   }
   return build.slice(0, slotCap);
 }
@@ -620,30 +609,26 @@ function renderGenerator() {
     return;
   }
   const archLabel = archetypeLabel(archetype);
-  const budgetFoods = generateBuild('budget', archetype, []).slice(0, slotCap);
-  const practicalFoods = generateBuild('practical', archetype, [budgetFoods]).slice(0, slotCap);
-  const premiumFoods = generateBuild('premium', archetype, [budgetFoods, practicalFoods]).slice(0, slotCap);
-
+  const budget = generateBuild('budget', archetype, []);
+  const practical = generateBuild('practical', archetype, [budget]);
+  const premium = generateBuild('premium', archetype, [budget, practical]);
   const builds = [
-    {style:'budget', foods: budgetFoods},
-    {style:'practical', foods: practicalFoods},
-    {style:'premium', foods: premiumFoods},
+    {style:'budget', foods: budget},
+    {style:'practical', foods: practical},
+    {style:'premium', foods: premium},
   ];
-
   els.generatorWrap.innerHTML = builds.map((item, idx) => {
     const meta = buildStyleMeta(item.style, archLabel);
-    const foods = item.foods.slice(0, slotCap);
-    const metrics = buildSummaryMetrics(foods);
-    const slotsLabel = `${foods.length}/${slotCap} slot${slotCap === 1 ? '' : 's'}`;
+    item.foods = item.foods.slice(0, slotCap);
+    const metrics = buildSummaryMetrics(item.foods);
     return `<article class="build-card">
       <div class="build-title">${meta.title}</div>
       <div class="build-subtitle">${meta.subtitle}</div>
       <div class="build-badges">
         <span class="build-badge">${item.style === 'budget' ? 'Early game / lower cost' : item.style === 'practical' ? 'Mid game / balanced' : 'Endgame / best possible'}</span>
-        <span class="build-badge">${slotsLabel}</span>
-        <span class="build-badge">Overall ${fmtMaybe(metrics.overall)}</span>
+        <span class="build-badge">${slotCap} slots</span><span class="build-badge">Overall ${fmtMaybe(metrics.overall)}</span>
       </div>
-      <div class="build-foods">${foods.map(food => `<div class="build-food-chip">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>
+      <div class="build-foods">${item.foods.slice(0, slotCap).map(food => `<div class="build-food-chip">${iconMarkup(food.name,'recipes','ingredient-mini')}<span>${food.name}</span></div>`).join('')}</div>
       <div class="build-metrics">
         <div class="build-metric"><div class="build-metric-label">Survival</div><div class="build-metric-value">${fmtMaybe(metrics.survival)}</div></div>
         <div class="build-metric"><div class="build-metric-label">Melee</div><div class="build-metric-value">${fmtMaybe(metrics.melee)}</div></div>
@@ -653,23 +638,18 @@ function renderGenerator() {
       <button class="use-build-btn" data-build="${idx}">Use this build</button>
     </article>`;
   }).join('');
-
   els.generatorWrap.querySelectorAll('.use-build-btn').forEach((btn, idx) => {
     btn.addEventListener('click', () => {
       clearPlanner(false);
-      const foods = builds[idx].foods.slice(0, selectedSlotCount() || 5);
-      foods.forEach((food, i) => {
-        const slotInput = document.getElementById(`slot-${i}`);
-        const qtyInput = document.getElementById(`slot-qty-${i}`);
-        if (slotInput) slotInput.value = food.name;
-        if (qtyInput) qtyInput.value = 1;
+      builds[idx].foods.slice(0, selectedSlotCount() || 5).forEach((food, i) => {
+        document.getElementById(`slot-${i}`).value = food.name;
+        document.getElementById(`slot-qty-${i}`).value = 1;
       });
       window.scrollTo({top: document.getElementById('plannerPanel').offsetTop - 20, behavior:'smooth'});
     });
   });
 }
 
-// ---------- Export helpers ----------
 // ---------- Export helpers ----------
 function buildSummaryText(selectedFoods) {
   const activeFoods = aggregateEffectFoods(selectedFoods);
@@ -728,7 +708,6 @@ function applyBuildState(payload) {
     document.getElementById(`slot-qty-${i}`).value = item.qty || 1;
   });
 }
-async 
 async function loadImageSafe(src) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -811,53 +790,42 @@ async function drawIconOrFallback(ctx, name, type, x, y, size=38) {
     drawText(ctx, initials(name), x+size/2-10, y+24, {font:'bold 18px Inter, Arial, sans-serif', color:'#f2ddb0'});
   }
 }
-
 async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
-  const selectedFoods = state.calculatedFoods.slice(0, selectedSlotCount() || state.calculatedFoods.length);
+  const selectedFoods = state.calculatedFoods;
   const activeFoods = aggregateEffectFoods(selectedFoods);
-  const shopping = aggregateIngredients(selectedFoods);
+  const shopping = aggregateIngredients(selectedFoods).slice(0, 16);
   const buffTotals = sumBuffs(activeFoods);
-
   const categorized = {};
   CATEGORY_ORDER.forEach(cat => categorized[cat] = []);
   Object.entries(buffTotals).forEach(([label, value]) => {
     const cat = categorizeBuffLabel(label);
+    if (!categorized[cat]) categorized[cat] = [];
     categorized[cat].push({label, value});
   });
-
   const metrics = activeFoods.reduce((acc, food) => {
     Object.entries(food.computedScores || {}).forEach(([k,v]) => { acc[k] = (acc[k] || 0) + Number(v || 0); });
     return acc;
   }, {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0});
 
-  const leftFoodsHeight = Math.max(220, selectedFoods.length * 96 + 110);
-  const shoppingRows = Math.min(18, shopping.length);
-  const shoppingHeight = Math.max(260, shoppingRows * 46 + 110);
-  const rightCatCount = CATEGORY_ORDER.filter(cat => (categorized[cat] || []).length).length || 1;
-  const rightHeight = Math.max(520, rightCatCount * 170 + 100);
-  const bodyHeight = Math.max(leftFoodsHeight + 360 + shoppingHeight, rightHeight + 80);
-  const totalHeight = 260 + bodyHeight + 80;
-
   const canvas = document.createElement('canvas');
-  canvas.width = 1800;
-  canvas.height = totalHeight;
+  canvas.width = 1800; canvas.height = 1600;
   const ctx = canvas.getContext('2d');
 
   // Background
   ctx.fillStyle = '#07090f';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0,0,canvas.width,canvas.height);
   const bgImg = await loadImageSafe('assets/bg/page-bg.jpg');
   if (bgImg) {
-    ctx.globalAlpha = 0.20;
+    ctx.globalAlpha = 0.22;
     ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 1;
   }
-  ctx.fillStyle = 'rgba(7,9,15,.86)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(7,9,15,.84)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Header / hero
-  fillRoundRect(ctx, 40, 36, 1720, 180, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.24)');
+  // Hero card
+  fillRoundRect(ctx, 40, 36, 1720, 180, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
   const heroImg = await loadImageSafe('assets/bg/hero.png');
   if (heroImg) {
     ctx.save();
@@ -872,86 +840,78 @@ async function exportBuildAsPng() {
   drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
   drawText(ctx, currentSettingsLabel(), 70, 172, {font:'24px Inter, Arial, sans-serif', color:'#e0c480'});
 
-  // Left column
-  const leftX = 40, leftW = 860, rightX = 930, rightW = 830, bodyY = 250;
-  fillRoundRect(ctx, leftX, bodyY, leftW, bodyHeight, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  drawText(ctx, 'Selected Recipes', leftX + 30, bodyY + 50, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections • ${selectedSlotCount() || selectedFoods.length} slot limit`, leftX + 30, bodyY + 86, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
-
-  let y = bodyY + 130;
-  for (let i = 0; i < selectedFoods.length; i++) {
+  // Left column build
+  fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Selected Recipes', 70, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, 70, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+  let y = 380;
+  for (let i=0; i<selectedFoods.length; i++) {
     const food = selectedFoods[i];
-    fillRoundRect(ctx, leftX + 25, y, leftW - 50, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
-    await drawIconOrFallback(ctx, food.name, 'recipes', leftX + 42, y + 20, 42);
-    drawText(ctx, `${i + 1}. ${food.name}`, leftX + 98, y + 34, {font:'bold 28px Inter, Arial, sans-serif'});
-    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, leftX + 98, y + 62, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+    fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
+    await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
+    drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
+    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
     const fam = effectFamily(food);
-    const isActive = activeFoods.some(f => effectFamily(f) === fam && f.name === food.name);
-    const note = isActive ? 'Active effect' : 'Strict-mode refresh / duplicate';
-    drawText(ctx, note, leftX + 610, y + 48, {font:'18px Inter, Arial, sans-serif', color:isActive ? '#54d69a' : '#ffb5b5'});
+    const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
+    const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
+    drawText(ctx, note, 650, y+50, {font:'18px Inter, Arial, sans-serif', color: active ? '#54d69a' : '#ffb5b5'});
     y += 96;
+    if (y > 820) break;
   }
 
-  // Score snapshot left mid
-  const scoreY = y + 10;
-  fillRoundRect(ctx, leftX + 25, scoreY, leftW - 50, 246, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Build Score Snapshot', leftX + 48, scoreY + 40, {font:'bold 34px Inter, Arial, sans-serif'});
+  // Build score
+  fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
   const scoreBoxes = [
-    ['Survival', metrics.survival], ['Melee', metrics.melee], ['Ranged', metrics.ranged], ['Exploration', metrics.exploration],
-    ['XP / Support', metrics.xp_support], ['Utility', metrics.utility], ['Overall', metrics.overall], ['Efficiency', metrics.efficiency]
+    ['Survival', metrics.survival], ['Melee', metrics.melee], ['Ranged', metrics.ranged],
+    ['Exploration', metrics.exploration], ['XP / Support', metrics.xp_support], ['Utility', metrics.utility],
+    ['Overall', metrics.overall], ['Efficiency', metrics.efficiency]
   ];
-  let sx = leftX + 48, sy = scoreY + 70;
+  let sx=88, sy=935;
   scoreBoxes.forEach((item, idx) => {
-    const bw = 182, bh = 64;
+    const bw=180, bh=58;
     fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    drawText(ctx, item[0], sx + 14, sy + 24, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(item[1]), sx + 14, sy + 51, {font:'bold 28px Inter, Arial, sans-serif'});
+    drawText(ctx, item[0], sx+14, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(item[1]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
     sx += bw + 12;
-    if ((idx + 1) % 4 === 0) { sx = leftX + 48; sy += bh + 12; }
+    if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
   });
 
-  // Shopping list left bottom
-  const shoppingY = scoreY + 270;
-  fillRoundRect(ctx, leftX + 25, shoppingY, leftW - 50, shoppingHeight, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Shopping List', leftX + 48, shoppingY + 42, {font:'bold 34px Inter, Arial, sans-serif'});
-  drawText(ctx, `${shopping.length} ingredient rows aggregated`, leftX + 48, shoppingY + 76, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
-
-  const colX = [leftX + 48, leftX + 455];
-  let rowBaseY = shoppingY + 118;
-  const perCol = Math.ceil(shoppingRows / 2);
-  for (let i = 0; i < shoppingRows; i++) {
-    const row = shopping[i];
-    const col = i >= perCol ? 1 : 0;
-    const rowIndex = col ? i - perCol : i;
-    const iy = rowBaseY + rowIndex * 46;
-    await drawIconOrFallback(ctx, row.name, 'ingredients', colX[col], iy - 12, 34);
-    drawText(ctx, row.name, colX[col] + 46, iy + 12, {font:'22px Inter, Arial, sans-serif'});
-    drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, colX[col] + 270, iy + 12, {font:'22px Inter, Arial, sans-serif', color:'#f0ddb0'});
+  // Shopping list
+  fillRoundRect(ctx, 65, 1105, 810, 430, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, 1148, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = 1188;
+  for (const row of shopping) {
+    await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
+    drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
+    drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 660, iy+13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
+    iy += 44;
+    if (iy > 1510) break;
   }
 
   // Right column buffs
-  fillRoundRect(ctx, rightX, bodyY, rightW, bodyHeight, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  drawText(ctx, 'Combined Buffs', rightX + 30, bodyY + 50, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(ctx, 'Grouped by gameplay category for faster reading.', rightX + 30, bodyY + 86, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+  fillRoundRect(ctx, 930, 250, 830, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Combined Buffs', 960, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, 'Grouped by gameplay category for faster reading.', 960, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
 
-  let cy = bodyY + 130;
+  let cy = 380;
   for (const cat of CATEGORY_ORDER) {
-    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value) === 0));
+    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
     if (!list.length) continue;
-    const boxH = 130 + Math.ceil(Math.min(6, list.length) / 2) * 44;
-    fillRoundRect(ctx, rightX + 25, cy, rightW - 50, boxH, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-    drawText(ctx, CATEGORY_LABELS[cat], rightX + 48, cy + 34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
-    let chipX = rightX + 48, chipY = cy + 56;
+    fillRoundRect(ctx, 955, cy, 780, 150, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+    drawText(ctx, CATEGORY_LABELS[cat], 978, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
+    let chipX = 978, chipY = cy+54;
     for (const row of list.slice(0, 6)) {
       const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
       const w = drawChip(ctx, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
       chipX += w + 8;
-      if (chipX > rightX + rightW - 220) { chipX = rightX + 48; chipY += 46; }
+      if (chipX > 1600) { chipX = 978; chipY += 46; }
     }
-    cy += boxH + 14;
+    cy += 166;
+    if (cy > 1380) break;
   }
 
-  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', rightX + 250, bodyY + bodyHeight - 28, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, 1532, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
 
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
@@ -959,7 +919,6 @@ async function exportBuildAsPng() {
   link.click();
 }
 
-// ---------- Clear / random / init ----------
 // ---------- Clear / random / init ----------
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {

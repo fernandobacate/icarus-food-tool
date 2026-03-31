@@ -109,8 +109,7 @@ button:hover{filter:brightness(1.08)}
 .icon-wrap img,.ingredient-mini img{width:100%;height:100%;object-fit:cover;display:block}
 .icon-fallback{font-weight:800;color:#f2ddb0;font-size:.86rem;letter-spacing:.04em}
 .recipe-name{font-weight:700;font-size:1rem;line-height:1.15}
-.meta-row,.buff-chips,.build-badges{display:flex;gap:8px;flex-wrap:wrap}
-.build-foods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.meta-row,.buff-chips,.build-foods,.build-badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge,.chip,.build-badge{
   display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:#dfe4ea;font-size:.78rem
 }
