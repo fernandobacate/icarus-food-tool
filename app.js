@@ -201,19 +201,14 @@ function bySelectedSort(a, b, mode) {
 function deriveBenchList() {
   const metaBenches = state.data?.meta?.benches && Object.keys(state.data.meta.benches).length
     ? Object.keys(state.data.meta.benches)
-    : [];
-  const dataBenches = [...new Set((state.foods || []).map(f => f?.bench).filter(Boolean))];
-  const merged = [...new Set([...metaBenches, ...dataBenches])].filter(Boolean).sort((a,b)=>a.localeCompare(b));
-  return ["All", ...merged];
+    : [...new Set((state.foods || []).map(f => f.bench).filter(Boolean))];
+  return ["All", ...metaBenches.sort((a,b)=>a.localeCompare(b))];
 }
-function renderFilters(forceValue = null) {
-  if (!els.benchFilter) return;
-  const previous = forceValue || els.benchFilter.value || "All";
+function renderFilters() {
+  const previous = els.benchFilter?.value || "All";
   const benches = deriveBenchList();
-  const safeBenches = benches.length ? benches : ["All"];
-  els.benchFilter.innerHTML = safeBenches.map(b => `<option value="${b}">${b}</option>`).join("");
-  els.benchFilter.value = safeBenches.includes(previous) ? previous : "All";
-  if (!els.benchFilter.value) els.benchFilter.value = "All";
+  els.benchFilter.innerHTML = benches.map(b => `<option value="${b}">${b}</option>`).join("");
+  els.benchFilter.value = benches.includes(previous) ? previous : "All";
 }
 function applyFoodFilter() {
   const bench = els.benchFilter.value || "All";
@@ -977,21 +972,23 @@ async function exportBuildAsPng() {
     ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
     ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
-  let sx=88, sy=935;
-  scoreBoxes.forEach(async (item, idx) => {
-    const bw=180, bh=58;
-    fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
-    drawText(ctx, item[1], sx+48, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(ctx, fmtMaybe(item[2]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
-    sx += bw + 12;
-    if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
-  });
+  for (let idx = 0; idx < scoreBoxes.length; idx++) {
+    const [key, label, value] = scoreBoxes[idx];
+    const bw = 180, bh = 58;
+    const col = idx % 4;
+    const row = Math.floor(idx / 4);
+    const boxX = 88 + col * (bw + 12);
+    const boxY = 935 + row * (bh + 12);
+    fillRoundRect(ctx, boxX, boxY, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
+    await drawCategoryIconOrFallback(ctx, key, boxX + 12, boxY + 12, 28);
+    drawText(ctx, label, boxX + 48, boxY + 22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(value), boxX + 14, boxY + 48, {font:'bold 28px Inter, Arial, sans-serif'});
+  }
 
   // Shopping list
-  fillRoundRect(ctx, 65, 1105, 810, 430, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Shopping List', 88, 1148, {font:'bold 34px Inter, Arial, sans-serif'});
-  let iy = 1188;
+  fillRoundRect(ctx, 65, 1120, 810, 415, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, 1163, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = 1203;
   for (const row of shopping) {
     await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
     drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
@@ -1035,7 +1032,7 @@ async function exportBuildAsPng() {
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {
   if (clearPreset) state.currentPreset = null;
-  renderFilters('All');
+  renderFilters();
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   clearResultsOnly();
@@ -1069,7 +1066,7 @@ async function loadFoods() {
   const response = await fetch('./foods.json');
   state.data = await response.json();
   state.foods = state.data.foods;
-  renderFilters('All');
+  renderFilters();
   renderKPIs();
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
@@ -1091,7 +1088,7 @@ async function loadFoods() {
 }
 
 function syncPlannerState() {
-  renderFilters(els.benchFilter?.value || 'All');
+  renderFilters();
   const count = selectedSlotCount();
   const slotPrompt = document.getElementById('slotPrompt');
   if (count > 0) {
@@ -1111,14 +1108,7 @@ els.sortFoods.addEventListener('change', () => renderSelectors(preserveDraft()))
 els.rankingLimit.addEventListener('change', renderRankings);
 els.hideZeroBuffs.addEventListener('change', () => state.calculated && calculateAll());
 els.sortBuffs.addEventListener('change', () => state.calculated && calculateAll());
-els.stomachSlots.addEventListener('change', () => {
-  renderFilters('All');
-  clearPlanner(false);
-  renderGenerator();
-  renderPresets();
-  renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
-  applyFoodFilter();
-});
+els.stomachSlots.addEventListener('change', () => { renderFilters(); clearPlanner(false); renderGenerator(); renderPresets(); renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1}))); });
 els.carnivoreToggle.addEventListener('change', refreshDataViews);
 els.ignoreConsumeStats.addEventListener('change', refreshDataViews);
 els.strictMode.addEventListener('change', () => state.calculated && calculateAll());
