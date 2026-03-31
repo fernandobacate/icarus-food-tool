@@ -26,7 +26,6 @@ const footerMetaEl = document.getElementById("footerMeta");
 const presetButtonsEl = document.getElementById("presetButtons");
 const topBuildsWrapEl = document.getElementById("topBuildsWrap");
 const scoringNotesWrapEl = document.getElementById("scoringNotesWrap");
-const autocompletePortalEl = document.getElementById("autocompletePortal");
 
 const benchFilterEl = document.getElementById("benchFilter");
 const sortFoodsEl = document.getElementById("sortFoods");
@@ -361,6 +360,7 @@ function renderSelectors(preserve = []) {
         <div class="slot-controls">
           <div class="autocomplete-wrap">
             <input class="wide-input autocomplete-input" id="slot-${i}" placeholder="Click or type to browse..." value="${current.replace(/"/g, '&quot;')}" autocomplete="off">
+            <div id="autocomplete-${i}" class="autocomplete-dropdown hidden"></div>
           </div>
           <label>
             <span>Craft qty</span>
@@ -383,20 +383,22 @@ function attachAutocomplete() {
   }
 }
 
+function getAutocompleteDropdown(index) {
+  return document.getElementById(`autocomplete-${index}`);
+}
+
 function openAutocomplete(index, term = "") {
   state.activeInputIndex = index;
   applyFoodFilter();
   const list = state.filteredFoods.filter(food => food.name.toLowerCase().includes(String(term || "").toLowerCase())).slice(0, 40);
   state.activeAutocompleteItems = list;
   state.activeAutocompleteSelection = list.length ? 0 : -1;
-  const input = document.getElementById(`slot-${index}`);
-  const rect = input.getBoundingClientRect();
-  autocompletePortalEl.style.left = `${Math.max(12, rect.left)}px`;
-  autocompletePortalEl.style.top = `${rect.bottom + 8}px`;
-  autocompletePortalEl.style.width = `${Math.max(rect.width, 420)}px`;
-  autocompletePortalEl.innerHTML = list.length ? list.map((food, idx) => autocompleteItemMarkup(food, idx === state.activeAutocompleteSelection)).join("") : `<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No recipes found</div></div></div>`;
-  autocompletePortalEl.classList.remove("hidden");
-  autocompletePortalEl.querySelectorAll(".autocomplete-item[data-name]").forEach(el => {
+  closeAutocomplete(index, true);
+  const dropdown = getAutocompleteDropdown(index);
+  if (!dropdown) return;
+  dropdown.innerHTML = list.length ? list.map((food, idx) => autocompleteItemMarkup(food, idx === state.activeAutocompleteSelection)).join("") : `<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No recipes found</div></div></div>`;
+  dropdown.classList.remove("hidden");
+  dropdown.querySelectorAll(".autocomplete-item[data-name]").forEach(el => {
     el.addEventListener("mousedown", (e) => {
       e.preventDefault();
       selectAutocompleteFood(el.dataset.name);
@@ -404,11 +406,18 @@ function openAutocomplete(index, term = "") {
   });
 }
 
-function closeAutocomplete() {
-  autocompletePortalEl.classList.add("hidden");
-  autocompletePortalEl.innerHTML = "";
-  state.activeAutocompleteItems = [];
-  state.activeAutocompleteSelection = -1;
+function closeAutocomplete(exceptIndex = null, keepExcept = false) {
+  for (let i = 0; i < 5; i++) {
+    if (keepExcept && i === exceptIndex) continue;
+    const dropdown = getAutocompleteDropdown(i);
+    if (!dropdown) continue;
+    dropdown.classList.add("hidden");
+    dropdown.innerHTML = "";
+  }
+  if (!keepExcept) {
+    state.activeAutocompleteItems = [];
+    state.activeAutocompleteSelection = -1;
+  }
 }
 
 function autocompleteItemMarkup(food, active = false) {
@@ -436,7 +445,8 @@ function selectAutocompleteFood(name) {
 }
 
 function handleAutocompleteKeydown(e) {
-  if (autocompletePortalEl.classList.contains("hidden")) return;
+  const dropdown = getAutocompleteDropdown(state.activeInputIndex);
+  if (!dropdown || dropdown.classList.contains("hidden")) return;
   if (e.key === "ArrowDown") {
     e.preventDefault();
     if (!state.activeAutocompleteItems.length) return;
@@ -458,7 +468,7 @@ function handleAutocompleteKeydown(e) {
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".autocomplete-wrap") && !e.target.closest("#autocompletePortal")) closeAutocomplete();
+  if (!e.target.closest(".autocomplete-wrap")) closeAutocomplete();
 });
 
 function renderPresets() {
@@ -622,16 +632,44 @@ function renderShopping(selectedFoods) {
 
 function renderTopBuilds(targetKey = archetypeSelectEl.value) {
   const builds = buildSuggestionsForArchetype(targetKey);
-  topBuildsWrapEl.innerHTML = `<div class="top-builds-grid">${builds.map(build => {
-    const scores = buildScoresForSelection(build.foods.map(f => ({...f, craftQty:1, effective:true})));
+  topBuildsWrapEl.innerHTML = `<div class="top-builds-grid">${builds.map((build, buildIndex) => {
+    const foods = build.foods.map(f => ({...f, craftQty:1, effective:true}));
+    const scores = buildScoresForSelection(foods);
+    const primary = targetKey === 'overall' ? 'overall' : targetKey;
     return `
       <article class="build-suggestion">
         <h3>${build.label} ${targetKey === 'overall' ? 'All-round' : titleize(targetKey)} Build</h3>
-        <div class="build-tags"><span class="badge">${build.description}</span><span class="badge">Overall ${fmtMaybe(scores.overall)}</span></div>
-        <div class="small-muted">${build.foods.map(f => f.name).join(" • ")}</div>
+        <div class="build-tags"><span class="badge">${build.description}</span><span class="badge">Overall ${fmtMaybe(scores.overall)}</span><span class="badge">${titleize(primary)} ${fmtMaybe(scores[primary] || 0)}</span></div>
+        <div class="build-recipes">
+          ${build.foods.map(food => `<div class="build-food-pill">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div>`).join('')}
+        </div>
+        <div class="build-score-grid">
+          <div class="build-score-mini"><div class="mini-label">Survival</div><div class="mini-value">${fmtMaybe(scores.survival)}</div></div>
+          <div class="build-score-mini"><div class="mini-label">Melee</div><div class="mini-value">${fmtMaybe(scores.melee)}</div></div>
+          <div class="build-score-mini"><div class="mini-label">Ranged</div><div class="mini-value">${fmtMaybe(scores.ranged)}</div></div>
+        </div>
+        <div class="build-footer">
+          <div class="small-muted">Apply this build to the planner, adjust craft quantities, then calculate the final shopping list.</div>
+          <button class="use-build-btn" data-build-index="${buildIndex}" data-target-key="${targetKey}">Use this build</button>
+        </div>
       </article>
     `;
   }).join("")}</div>`;
+
+  topBuildsWrapEl.querySelectorAll('.use-build-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.buildIndex || 0);
+      const selectedBuild = builds[idx];
+      if (!selectedBuild) return;
+      const preserve = Array.from({ length: 5 }, (_, i) => ({ name: selectedBuild.foods[i]?.name || '', qty: 1 }));
+      state.currentPreset = null;
+      renderPresets();
+      renderSelectors(preserve);
+      clearResultsOnly();
+      const planner = document.querySelector('.controls-panel');
+      if (planner) planner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 function titleize(key) {
@@ -793,7 +831,7 @@ async function loadFoods() {
   renderTopBuilds();
   renderRankings();
   clearResultsOnly();
-  if (preserve.some(p => p.name)) calculateAll();
+  // shared build links can prefill the planner, but the user still decides when to calculate.
   footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • archetype-aware planner and build explorer`;
 }
 
