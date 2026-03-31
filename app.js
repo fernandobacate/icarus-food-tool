@@ -1083,6 +1083,7 @@ function exportBuildAsPng() {
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {
   if (clearPreset) state.currentPreset = null;
+  renderFilters();
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   clearResultsOnly();
@@ -1140,7 +1141,12 @@ els.sortFoods.addEventListener('change', () => renderSelectors(preserveDraft()))
 els.rankingLimit.addEventListener('change', renderRankings);
 els.hideZeroBuffs.addEventListener('change', () => state.calculated && calculateAll());
 els.sortBuffs.addEventListener('change', () => state.calculated && calculateAll());
-els.stomachSlots.addEventListener('change', () => { clearPlanner(false); renderGenerator(); renderPresets(); });
+els.stomachSlots.addEventListener('change', () => {
+  renderFilters();
+  clearPlanner(false);
+  renderGenerator();
+  renderPresets();
+});
 els.carnivoreToggle.addEventListener('change', refreshDataViews);
 els.ignoreConsumeStats.addEventListener('change', refreshDataViews);
 els.strictMode.addEventListener('change', () => state.calculated && calculateAll());
