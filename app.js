@@ -973,7 +973,7 @@ async function exportBuildAsPng() {
     ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
   let sx=88, sy=935;
-  scoreBoxes.forEach(async (item, idx) => {
+  scoreBoxes.forEach( (item, idx) => {
     const bw=180, bh=58;
     fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
     await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
