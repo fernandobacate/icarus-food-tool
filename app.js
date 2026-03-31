@@ -1,3 +1,4 @@
+
 const state = {
   data: null,
   foods: [],
@@ -5,19 +6,10 @@ const state = {
   calculated: false,
   calculatedFoods: [],
   currentPreset: null,
-  activeAutocomplete: { slot: null, index: -1, items: [] },
+  activeInputIndex: null,
+  activeAutocompleteItems: [],
+  activeAutocompleteSelection: -1,
 };
-
-const SCORE_DIMS = [
-  ["survival", "Survival"],
-  ["melee", "Melee"],
-  ["ranged", "Ranged"],
-  ["exploration", "Exploration"],
-  ["xp_support", "XP / Support"],
-  ["utility", "Utility"],
-  ["overall", "Overall"],
-  ["efficiency", "Efficiency"],
-];
 
 const kpiGridEl = document.getElementById("kpiGrid");
 const selectorsEl = document.getElementById("selectors");
@@ -32,89 +24,60 @@ const shoppingWrapEl = document.getElementById("shoppingWrap");
 const rankingsWrapEl = document.getElementById("rankingsWrap");
 const footerMetaEl = document.getElementById("footerMeta");
 const presetButtonsEl = document.getElementById("presetButtons");
+const topBuildsWrapEl = document.getElementById("topBuildsWrap");
+const scoringNotesWrapEl = document.getElementById("scoringNotesWrap");
+const autocompletePortalEl = document.getElementById("autocompletePortal");
 
 const benchFilterEl = document.getElementById("benchFilter");
 const sortFoodsEl = document.getElementById("sortFoods");
 const rankingLimitEl = document.getElementById("rankingLimit");
+const rankingViewModeEl = document.getElementById("rankingViewMode");
 const hideZeroBuffsEl = document.getElementById("hideZeroBuffs");
 const sortBuffsEl = document.getElementById("sortBuffs");
+const strictModeEl = document.getElementById("strictMode");
+const carnivoreModeEl = document.getElementById("carnivoreMode");
+const ignoreConsumeStatsEl = document.getElementById("ignoreConsumeStats");
 const calculateBtn = document.getElementById("calculateBtn");
 const clearBtn = document.getElementById("clearBtn");
 const randomBuildBtn = document.getElementById("randomBuildBtn");
-const optimalBuildBtn = document.getElementById("optimalBuildBtn");
+const generateBuildsBtn = document.getElementById("generateBuildsBtn");
 const copySummaryBtn = document.getElementById("copySummaryBtn");
 const copyShoppingBtn = document.getElementById("copyShoppingBtn");
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 const downloadSummaryBtn = document.getElementById("downloadSummaryBtn");
 const downloadShoppingBtn = document.getElementById("downloadShoppingBtn");
-const exportPngBtn = document.getElementById("exportPngBtn");
-const strictModeEl = document.getElementById("strictMode");
-const carnivoreToggleEl = document.getElementById("carnivoreToggle");
-const ignoreConsumeStatsEl = document.getElementById("ignoreConsumeStats");
+const archetypeSelectEl = document.getElementById("archetypeSelect");
 
-const CATEGORY_WEIGHTS = {
-  survival: {
-    "Max health": 1,
-    "Health regen %": 3,
-    "Max stamina": 0.55,
-    "Stamina regen %": 1.8,
-    "Exposure resistance %": 2.2,
-    "Water consumption %": 1.0,
-    "Food consumption %": 1.0,
-    "Oxygen consumption %": 1.1,
-    "Cave sickness resist %": 1.8,
-    "Bacterial affliction duration %": 1.4,
-    "Parasitic affliction duration %": 1.4,
-    "Water on consume": 0.3,
-    "Food effects duration %": 0.5,
-    "Temperature °C": 0.3,
-  },
-  melee: {
-    "Melee damage %": 3.2,
-    "Melee attack speed %": 2.8,
-    "Return melee damage %": 1.7,
-    "Return melee damage chance %": 1.2,
-    "Perceived threat %": 0.2,
-    "Health regen %": 0.4,
-    "Max health": 0.25,
-  },
-  ranged: {
-    "Projectile damage %": 3.2,
-    "Reload speed %": 2.2,
-    "Charge speed %": 2.2,
-    "Critical damage %": 2.4,
-    "Max stamina": 0.2,
-    "Stamina regen %": 0.4,
-  },
-  exploration: {
-    "Movement speed %": 2.2,
-    "Over-encumbrance penalty %": 1.7,
-    "Oxygen consumption %": 1.7,
-    "Water consumption %": 1.6,
-    "Food consumption %": 1.3,
-    "Cave sickness resist %": 1.5,
-    "Exposure resistance %": 1.2,
-    "Foraging yield %": 0.9,
-    "Extra stone chance %": 0.8,
-    "Butchering yield %": 0.8,
-    "Temperature °C": 0.6,
-    "Perceived threat %": 0.4,
-  },
-  xp_support: {
-    "XP gained %": 2.2,
-    "Shared XP gained %": 2.6,
-    "Tamed creature XP %": 1.8,
-  },
-  utility: {
-    "Crafting speed %": 2.2,
-    "Stamina used by actions %": 1.8,
-    "Stamina regen delay %": 1.5,
-    "Food effects duration %": 1.2,
-    "Water on consume": 0.2,
-    "Extra stone chance %": 0.8,
-    "Foraging yield %": 0.8,
-    "Butchering yield %": 0.8,
-  }
+const SCORE_DIMS = [
+  ["survival", "Survival"],
+  ["melee", "Melee"],
+  ["ranged", "Ranged"],
+  ["exploration", "Exploration"],
+  ["xp_support", "XP / Support"],
+  ["utility", "Utility"],
+  ["overall", "Overall"],
+  ["efficiency", "Efficiency"],
+];
+
+const BUFF_GROUPS = [
+  ["survival", "Survival"],
+  ["melee", "Melee"],
+  ["ranged", "Ranged"],
+  ["exploration", "Exploration"],
+  ["xp_support", "XP / Support"],
+  ["utility", "Utility"],
+  ["other", "Other"],
+];
+
+const SCORING_NOTES = {
+  survival: "Health, health regen, resistances, and general sustain.",
+  melee: "Melee damage, melee attack speed, return damage, and critical pressure in close combat.",
+  ranged: "Projectile damage, charge speed, reload speed, and critical pressure for ranged weapons.",
+  exploration: "Stamina, stamina economy, oxygen/water economy, carry comfort, and mission mobility.",
+  xp_support: "XP gains, shared XP, and tamed creature / team-oriented value.",
+  utility: "Crafting speed, foraging, extra stone, threat modifiers, and similar utility effects.",
+  overall: "Weighted combination of the main archetype buckets for general all-round value.",
+  efficiency: "How much value the food gives relative to recipe complexity / cost."
 };
 
 function fmtNumber(value, digits = 0) {
@@ -133,7 +96,7 @@ function fmtMaybe(value) {
 function slugify(value) {
   return String(value || "")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -148,90 +111,122 @@ function iconMarkup(name, type = "recipes", className = "icon-wrap") {
   const slug = slugify(name);
   return `
     <div class="${className}">
-      <img src="assets/${type}/${slug}.png" alt="${name}" onerror="this.remove()">
+      <img src="assets/${type}/${slug}.png" alt="${name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
       <span class="icon-fallback">${initials(name)}</span>
     </div>
   `;
 }
 
-function negativeIsGood(label) {
-  return ["Food consumption %", "Water consumption %", "Oxygen consumption %", "Stamina used by actions %", "Stamina regen delay %", "Over-encumbrance penalty %", "Bacterial affliction duration %", "Parasitic affliction duration %"].includes(label);
-}
-
-function adjustedBuffValue(label, value, options = {}) {
-  let v = Number(value || 0);
-  if (negativeIsGood(label)) v = -v;
-  if (options.ignoreConsume && ["Food on consume", "Water on consume"].includes(label)) return 0;
-  return v;
-}
-
-function getFoodBuffEntries(food, options = {}) {
-  const mult = options.carnivore && food.bench === "Smoker" ? 1.3 : 1;
-  return Object.entries(food.buffs || {}).map(([key, meta]) => ({
-    key,
-    label: meta.label || key,
-    rawValue: Number(meta.value || 0),
-    value: Number(meta.value || 0) * mult,
-  }));
-}
-
-function deriveScores(food, options = {}) {
-  const buffEntries = getFoodBuffEntries(food, options);
-  const totals = {
-    survival: 0,
-    melee: 0,
-    ranged: 0,
-    exploration: 0,
-    xp_support: 0,
-    utility: 0,
-  };
-
-  for (const [bucket, weights] of Object.entries(CATEGORY_WEIGHTS)) {
-    for (const buff of buffEntries) {
-      if (weights[buff.label]) {
-        totals[bucket] += adjustedBuffValue(buff.label, buff.value, options) * weights[buff.label];
-      }
-    }
-  }
-
-  totals.overall =
-    totals.survival * 0.95 +
-    totals.melee * 0.95 +
-    totals.ranged * 0.95 +
-    totals.exploration * 0.8 +
-    totals.xp_support * 0.65 +
-    totals.utility * 0.6;
-
-  const complexity = Math.max(1, Number(food.ingredient_count || (food.ingredients || []).length || 1));
-  totals.efficiency = totals.overall / (complexity + 1.5);
-
-  return totals;
-}
-
-function withDerivedScores(food, options = {}) {
-  return {
-    ...food,
-    derivedScores: deriveScores(food, options),
-    adjustedBuffs: getFoodBuffEntries(food, options),
-  };
-}
-
-function currentOptions() {
-  return {
-    carnivore: carnivoreToggleEl.value === "on",
-    strict: strictModeEl.checked,
-    ignoreConsume: ignoreConsumeStatsEl.checked,
-  };
-}
-
-function refreshDerivedFoods() {
-  const opts = currentOptions();
-  state.foods = state.data.foods.map(food => withDerivedScores(food, opts));
+function normalizeEffectFamily(food) {
+  return slugify(food.modifier || food.name);
 }
 
 function bySelectedSort(a, b, mode) {
+  const aScores = deriveFoodScores(a);
+  const bScores = deriveFoodScores(b);
   if (mode === "name") return a.name.localeCompare(b.name);
-  return (b.derivedScores?.[mode] || 0) - (a.derivedScores?.[mode] || 0) || a.name.localeCompare(b.name);
+  return (bScores[mode] || 0) - (aScores[mode] || 0) || a.name.localeCompare(b.name);
+}
+
+function isCarnivoreOn() {
+  return carnivoreModeEl.value === "on";
+}
+
+function ignoreConsumeStats() {
+  return !!ignoreConsumeStatsEl.checked;
+}
+
+function applyBuffValueRules(label, value) {
+  let finalValue = Number(value || 0);
+  return finalValue;
+}
+
+function buffCategoriesForLabel(label) {
+  const lower = String(label || "").toLowerCase();
+  const cats = [];
+  if (lower.includes("max health") || lower.includes("health regen") || lower.includes("resist") || lower.includes("affliction")) cats.push("survival");
+  if (lower.includes("melee")) cats.push("melee");
+  if (lower.includes("critical damage")) { cats.push("melee"); cats.push("ranged"); }
+  if (lower.includes("projectile") || lower.includes("reload") || lower.includes("charge speed")) cats.push("ranged");
+  if (lower.includes("max stamina") || lower.includes("stamina regen") || lower.includes("oxygen") || lower.includes("water consumption") || lower.includes("movement speed") || lower.includes("temperature") || lower.includes("over-encumbrance")) cats.push("exploration");
+  if (lower.includes("xp") || lower.includes("shared xp") || lower.includes("tamed creature")) cats.push("xp_support");
+  if (lower.includes("crafting speed") || lower.includes("extra stone") || lower.includes("foraging") || lower.includes("threat") || lower.includes("butchering")) cats.push("utility");
+  if (!cats.length) cats.push("other");
+  return [...new Set(cats)];
+}
+
+function weightedContribution(label, value) {
+  const lower = String(label || "").toLowerCase();
+  const abs = Math.abs(Number(value || 0));
+  let base = Number(value || 0);
+
+  if (ignoreConsumeStats() && (lower.includes("food on consume") || lower.includes("water on consume"))) return {};
+
+  const result = {};
+  const add = (k, v) => { result[k] = (result[k] || 0) + v; };
+
+  if (lower.includes("max health")) add("survival", abs * 1.0);
+  else if (lower.includes("health regen")) add("survival", abs * 4.0);
+  else if (lower.includes("exposure resistance")) add("survival", abs * 3.0);
+  else if (lower.includes("cave sickness resist")) add("survival", abs * 4.0);
+  else if (lower.includes("food consumption")) add("exploration", abs * 2.5);
+  else if (lower.includes("water consumption")) add("exploration", abs * 3.0);
+  else if (lower.includes("oxygen consumption")) add("exploration", abs * 3.0);
+  else if (lower.includes("max stamina")) add("exploration", abs * 0.9);
+  else if (lower.includes("stamina regen delay")) add("exploration", abs * 2.2);
+  else if (lower.includes("stamina regen")) add("exploration", abs * 3.0);
+  else if (lower.includes("stamina used by actions")) add("exploration", abs * 3.2);
+  else if (lower.includes("movement speed")) add("exploration", abs * 5.0);
+  else if (lower.includes("temperature")) add("exploration", abs * 1.3);
+  else if (lower.includes("over-encumbrance")) add("exploration", abs * 2.2);
+  else if (lower.includes("melee damage")) add("melee", abs * 6.0);
+  else if (lower.includes("melee attack speed")) add("melee", abs * 5.0);
+  else if (lower.includes("return melee damage chance")) add("melee", abs * 2.5);
+  else if (lower.includes("return melee damage")) add("melee", abs * 2.5);
+  else if (lower.includes("critical damage")) { add("melee", abs * 4.0); add("ranged", abs * 4.0); }
+  else if (lower.includes("projectile damage")) add("ranged", abs * 6.0);
+  else if (lower.includes("charge speed")) add("ranged", abs * 3.0);
+  else if (lower.includes("reload speed")) add("ranged", abs * 3.0);
+  else if (lower.includes("xp gained")) add("xp_support", abs * 2.2);
+  else if (lower.includes("shared xp")) add("xp_support", abs * 2.4);
+  else if (lower.includes("tamed creature xp")) add("xp_support", abs * 1.8);
+  else if (lower.includes("crafting speed")) add("utility", abs * 5.0);
+  else if (lower.includes("extra stone")) add("utility", abs * 6.0);
+  else if (lower.includes("foraging yield")) add("utility", abs * 4.0);
+  else if (lower.includes("butchering yield")) add("utility", abs * 4.0);
+  else if (lower.includes("perceived threat")) add("utility", abs * 2.0);
+  else if (lower.includes("food on consume")) add("survival", Math.min(abs, 300) * 0.05);
+  else if (lower.includes("water on consume")) add("exploration", Math.min(abs, 300) * 0.05);
+
+  return result;
+}
+
+function deriveFoodBuffs(food) {
+  const out = {};
+  Object.entries(food.buffs || {}).forEach(([key, meta]) => {
+    const label = meta.label || key;
+    let value = applyBuffValueRules(label, meta.value || 0);
+    if (isCarnivoreOn() && food.bench === "Smoker") value *= 1.3;
+    out[key] = { label, value };
+  });
+  return out;
+}
+
+function deriveFoodScores(food) {
+  const totals = {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0};
+  const buffs = deriveFoodBuffs(food);
+  Object.values(buffs).forEach(meta => {
+    const contrib = weightedContribution(meta.label, meta.value);
+    Object.entries(contrib).forEach(([k,v]) => { totals[k] += v; });
+  });
+  const overall = totals.survival * 0.30 + totals.melee * 0.18 + totals.ranged * 0.18 + totals.exploration * 0.17 + totals.xp_support * 0.07 + totals.utility * 0.10;
+  const complexity = Math.max(1, Number(food.ingredient_count || (food.ingredients || []).length || 1));
+  const efficiency = overall / (0.85 + complexity);
+  return {
+    ...totals,
+    overall,
+    efficiency
+  };
 }
 
 function getDraftSelection() {
@@ -248,17 +243,27 @@ function getDraftSelection() {
   return draft;
 }
 
-function getActiveFoods(selectedFoods) {
-  if (!currentOptions().strict) return selectedFoods;
+function getEffectiveFoods(selectedFoods) {
+  if (!strictModeEl.checked) return selectedFoods.map(food => ({...food, effective:true}));
   const seen = new Set();
-  const active = [];
-  for (const food of selectedFoods) {
-    const family = String(food.modifier || food.name).toLowerCase();
-    if (seen.has(family)) continue;
+  return selectedFoods.map(food => {
+    const family = normalizeEffectFamily(food);
+    const effective = !seen.has(family);
     seen.add(family);
-    active.push(food);
-  }
-  return active;
+    return { ...food, effective };
+  });
+}
+
+function sumBuffs(selectedFoods) {
+  const totals = {};
+  selectedFoods.forEach(food => {
+    if (!food.effective) return;
+    const buffs = deriveFoodBuffs(food);
+    Object.entries(buffs).forEach(([key, meta]) => {
+      totals[key] = (totals[key] || 0) + Number(meta.value || 0);
+    });
+  });
+  return totals;
 }
 
 function aggregateIngredients(selectedFoods) {
@@ -276,55 +281,58 @@ function aggregateIngredients(selectedFoods) {
   return [...map.entries()].map(([name, meta]) => ({ name, ...meta })).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
 }
 
-function getAllBuffKeys(selectedFoods) {
-  const map = new Map();
-  selectedFoods.forEach(food => {
-    (food.adjustedBuffs || []).forEach(buff => map.set(buff.key, buff.label));
-  });
-  return [...map.entries()].map(([key, label]) => ({ key, label }));
-}
-
-function sumBuffs(selectedFoods) {
-  const totals = {};
-  selectedFoods.forEach(food => {
-    (food.adjustedBuffs || []).forEach(buff => {
-      totals[buff.key] = (totals[buff.key] || 0) + Number(buff.value || 0);
-    });
-  });
-  return totals;
-}
-
-function findStrictDuplicates(selectedFoods) {
-  const families = {};
-  selectedFoods.forEach(food => {
-    const family = String(food.modifier || food.name);
-    families[family] ||= [];
-    families[family].push(food.name);
-  });
-  return Object.entries(families).filter(([, names]) => names.length > 1).map(([family, names]) => ({ family, names }));
+function formatBuffValue(label, value) {
+  const lower = String(label).toLowerCase();
+  if (lower.includes("food on consume") && value > 300) return "300+ (maxed)";
+  return fmtMaybe(value);
 }
 
 function presetsForFoods(foods) {
-  const topBy = (key, limit = 5) => [...foods].sort((a, b) => (b.derivedScores?.[key] || 0) - (a.derivedScores?.[key] || 0)).slice(0, limit).map(f => f.name);
+  const dims = [
+    { id: "allround", label: "All-round", key: "overall" },
+    { id: "survival", label: "Survival Tank", key: "survival" },
+    { id: "melee", label: "Melee Focus", key: "melee" },
+    { id: "ranged", label: "Ranged Focus", key: "ranged" },
+    { id: "explore", label: "Exploration Rush", key: "exploration" },
+    { id: "xpsupport", label: "XP / Support", key: "xp_support" },
+    { id: "efficiency", label: "Efficiency", key: "efficiency" },
+  ];
+  return dims.map(dim => ({ id: dim.id, label: dim.label, names: buildSuggestedFoods(dim.key, "premium").map(f => f.name) }));
+}
+
+function buildSuggestedFoods(targetKey, style = "premium", limit = 5) {
+  let rows = state.foods.map(food => ({ food, score: deriveFoodScores(food)[targetKey] || 0, derived: deriveFoodScores(food) }));
+  if (style === "budget") rows = rows.filter(r => (r.food.ingredient_count || 0) <= 3 || ["C", "D"].includes(r.food.tier));
+  if (style === "practical") rows = rows.filter(r => (r.food.ingredient_count || 0) <= 5);
+  rows.sort((a,b) => (b.score - a.score) || ((b.derived.efficiency||0) - (a.derived.efficiency||0)));
+  const picked = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const family = normalizeEffectFamily(row.food);
+    if (seen.has(family)) continue;
+    seen.add(family);
+    picked.push(row.food);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}
+
+function buildSuggestionsForArchetype(targetKey) {
   return [
-    { id: "allround", label: "All-round", names: topBy("overall") },
-    { id: "survival", label: "Survival Tank", names: topBy("survival") },
-    { id: "melee", label: "Melee Focus", names: topBy("melee") },
-    { id: "ranged", label: "Ranged Focus", names: topBy("ranged") },
-    { id: "explore", label: "Exploration Rush", names: topBy("exploration") },
-    { id: "xpsupport", label: "XP / Support", names: topBy("xp_support") },
-    { id: "efficiency", label: "Efficiency", names: topBy("efficiency") },
+    { style:"budget", label:"Budget", foods: buildSuggestedFoods(targetKey, "budget"), description:"Cheaper / lower-complexity option." },
+    { style:"practical", label:"Practical", foods: buildSuggestedFoods(targetKey, "practical"), description:"Balanced real-use option." },
+    { style:"premium", label:"Premium", foods: buildSuggestedFoods(targetKey, "premium"), description:"Highest-value archetype pick." },
   ];
 }
 
 function renderKPIs() {
-  const meta = state.data.meta;
-  const bestOverall = [...state.foods].sort((a,b)=>b.derivedScores.overall-a.derivedScores.overall)[0];
+  const topOverallRows = state.foods.map(food => ({ food, score: deriveFoodScores(food).overall })).sort((a,b)=>b.score-a.score);
+  const top = topOverallRows[0];
   const kpis = [
-    { label: "Total recipes", value: fmtNumber(meta.total_recipes), sub: "Complete dataset loaded" },
-    { label: "Ingredient rows", value: fmtNumber(meta.total_ingredient_rows), sub: "Shopping list ready" },
-    { label: "Best overall", value: bestOverall?.name || "—", sub: bestOverall ? `${fmtMaybe(bestOverall.derivedScores.overall)} • ${bestOverall.bench}` : "" },
-    { label: "Smoker recipes", value: fmtNumber(meta.benches?.Smoker || 0), sub: currentOptions().carnivore ? "Carnivore bonuses active" : "Carnivore bonuses inactive" },
+    { label: "Total recipes", value: fmtNumber(state.data.meta.total_recipes), sub: "Complete dataset loaded" },
+    { label: "Ingredient rows", value: fmtNumber(state.data.meta.total_ingredient_rows), sub: "Shopping list ready" },
+    { label: "Best overall", value: top?.food.name || "—", sub: top ? `${fmtMaybe(top.score)} • ${top.food.bench}` : "" },
+    { label: "Smoker recipes", value: fmtNumber(state.data.meta.benches?.Smoker || 0), sub: isCarnivoreOn() ? "Carnivore bonus active" : "Carnivore bonus off" },
   ];
   kpiGridEl.innerHTML = kpis.map(k => `<article class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div><div class="kpi-sub">${k.sub}</div></article>`).join("");
 }
@@ -340,115 +348,6 @@ function applyFoodFilter() {
   state.filteredFoods = state.foods.filter(f => bench === "All" || f.bench === bench).sort((a, b) => bySelectedSort(a, b, mode));
 }
 
-function autocompleteItemMarkup(food) {
-  return `
-    <div class="autocomplete-item" data-name="${food.name}">
-      ${iconMarkup(food.name, "recipes", "ingredient-mini")}
-      <div class="autocomplete-main">
-        <div class="autocomplete-name">${food.name}</div>
-        <div class="autocomplete-meta">${food.bench}</div>
-      </div>
-      <div class="autocomplete-score">
-        <div><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span></div>
-        <div style="margin-top:6px">Overall ${fmtMaybe(food.derivedScores?.overall)}</div>
-      </div>
-    </div>
-  `;
-}
-
-function openAutocomplete(slotIndex) {
-  document.querySelectorAll('.autocomplete-list').forEach((el, idx) => {
-    if (idx !== slotIndex) el.classList.add('hidden');
-  });
-  const listEl = document.getElementById(`autocomplete-${slotIndex}`);
-  if (listEl) listEl.classList.remove('hidden');
-}
-
-function closeAutocomplete(slotIndex) {
-  const listEl = document.getElementById(`autocomplete-${slotIndex}`);
-  if (listEl) listEl.classList.add('hidden');
-  if (state.activeAutocomplete.slot === slotIndex) {
-    state.activeAutocomplete = { slot: null, index: -1, items: [] };
-  }
-}
-
-function renderAutocompleteList(slotIndex, items) {
-  const listEl = document.getElementById(`autocomplete-${slotIndex}`);
-  if (!listEl) return;
-  state.activeAutocomplete = { slot: slotIndex, index: items.length ? 0 : -1, items };
-  listEl.innerHTML = items.length
-    ? items.map(food => autocompleteItemMarkup(food)).join('')
-    : '<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No matches</div></div></div>';
-  listEl.querySelectorAll('.autocomplete-item[data-name]').forEach((itemEl, itemIndex) => {
-    if (itemIndex === state.activeAutocomplete.index) itemEl.classList.add('active');
-    itemEl.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      selectFood(slotIndex, itemEl.dataset.name);
-    });
-  });
-}
-
-function moveAutocompleteIndex(direction) {
-  const ac = state.activeAutocomplete;
-  if (ac.slot == null || !ac.items.length) return;
-  ac.index = (ac.index + direction + ac.items.length) % ac.items.length;
-  const listEl = document.getElementById(`autocomplete-${ac.slot}`);
-  if (!listEl) return;
-  [...listEl.querySelectorAll('.autocomplete-item[data-name]')].forEach((el, idx) => {
-    el.classList.toggle('active', idx === ac.index);
-  });
-  listEl.querySelectorAll('.autocomplete-item[data-name]')[ac.index]?.scrollIntoView({ block: 'nearest' });
-}
-
-function selectFood(slotIndex, foodName) {
-  const input = document.getElementById(`slot-${slotIndex}`);
-  if (input) input.value = foodName;
-  closeAutocomplete(slotIndex);
-}
-
-function wireAutocomplete(slotIndex) {
-  const wrap = document.getElementById(`autocomplete-wrap-${slotIndex}`);
-  const input = document.getElementById(`slot-${slotIndex}`);
-  if (!wrap || !input) return;
-
-  input.addEventListener('focus', () => {
-    applyFoodFilter();
-    renderAutocompleteList(slotIndex, state.filteredFoods);
-    openAutocomplete(slotIndex);
-  });
-
-  input.addEventListener('input', () => {
-    applyFoodFilter();
-    const term = input.value.trim().toLowerCase();
-    const matches = state.filteredFoods.filter(food => food.name.toLowerCase().includes(term));
-    renderAutocompleteList(slotIndex, matches);
-    openAutocomplete(slotIndex);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (state.activeAutocomplete.slot !== slotIndex) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      moveAutocompleteIndex(1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      moveAutocompleteIndex(-1);
-    } else if (e.key === 'Enter') {
-      const ac = state.activeAutocomplete;
-      if (ac.items.length && ac.index >= 0) {
-        e.preventDefault();
-        selectFood(slotIndex, ac.items[ac.index].name);
-      }
-    } else if (e.key === 'Escape') {
-      closeAutocomplete(slotIndex);
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!wrap.contains(e.target)) closeAutocomplete(slotIndex);
-  });
-}
-
 function renderSelectors(preserve = []) {
   applyFoodFilter();
   selectorsEl.innerHTML = "";
@@ -460,9 +359,8 @@ function renderSelectors(preserve = []) {
       <div class="slot">
         <div class="slot-header"><strong>Slot ${i + 1}</strong><span>${current ? "Draft selected" : "Empty"}</span></div>
         <div class="slot-controls">
-          <div class="autocomplete-wrap" id="autocomplete-wrap-${i}">
-            <input class="wide-input" id="slot-${i}" placeholder="Click or type to browse recipes..." value="${current.replace(/"/g, '&quot;')}">
-            <div class="autocomplete-list hidden" id="autocomplete-${i}"></div>
+          <div class="autocomplete-wrap">
+            <input class="wide-input autocomplete-input" id="slot-${i}" placeholder="Click or type to browse..." value="${current.replace(/"/g, '&quot;')}" autocomplete="off">
           </div>
           <label>
             <span>Craft qty</span>
@@ -472,8 +370,96 @@ function renderSelectors(preserve = []) {
       </div>
     `);
   }
-  for (let i = 0; i < 5; i++) wireAutocomplete(i);
+  attachAutocomplete();
 }
+
+function attachAutocomplete() {
+  for (let i = 0; i < 5; i++) {
+    const input = document.getElementById(`slot-${i}`);
+    if (!input) continue;
+    input.addEventListener("focus", () => openAutocomplete(i, input.value));
+    input.addEventListener("input", () => openAutocomplete(i, input.value));
+    input.addEventListener("keydown", (e) => handleAutocompleteKeydown(e));
+  }
+}
+
+function openAutocomplete(index, term = "") {
+  state.activeInputIndex = index;
+  applyFoodFilter();
+  const list = state.filteredFoods.filter(food => food.name.toLowerCase().includes(String(term || "").toLowerCase())).slice(0, 40);
+  state.activeAutocompleteItems = list;
+  state.activeAutocompleteSelection = list.length ? 0 : -1;
+  const input = document.getElementById(`slot-${index}`);
+  const rect = input.getBoundingClientRect();
+  autocompletePortalEl.style.left = `${Math.max(12, rect.left)}px`;
+  autocompletePortalEl.style.top = `${rect.bottom + 8}px`;
+  autocompletePortalEl.style.width = `${Math.max(rect.width, 420)}px`;
+  autocompletePortalEl.innerHTML = list.length ? list.map((food, idx) => autocompleteItemMarkup(food, idx === state.activeAutocompleteSelection)).join("") : `<div class="autocomplete-item"><div class="autocomplete-main"><div class="autocomplete-name">No recipes found</div></div></div>`;
+  autocompletePortalEl.classList.remove("hidden");
+  autocompletePortalEl.querySelectorAll(".autocomplete-item[data-name]").forEach(el => {
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      selectAutocompleteFood(el.dataset.name);
+    });
+  });
+}
+
+function closeAutocomplete() {
+  autocompletePortalEl.classList.add("hidden");
+  autocompletePortalEl.innerHTML = "";
+  state.activeAutocompleteItems = [];
+  state.activeAutocompleteSelection = -1;
+}
+
+function autocompleteItemMarkup(food, active = false) {
+  const scores = deriveFoodScores(food);
+  return `
+    <div class="autocomplete-item ${active ? 'active' : ''}" data-name="${food.name}">
+      ${iconMarkup(food.name, "recipes", "ingredient-mini")}
+      <div class="autocomplete-main">
+        <div class="autocomplete-name">${food.name}</div>
+        <div class="autocomplete-meta">${food.bench}</div>
+      </div>
+      <div class="autocomplete-score">
+        <div><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span></div>
+        <div style="margin-top:6px">Overall ${fmtMaybe(scores.overall)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function selectAutocompleteFood(name) {
+  if (state.activeInputIndex == null) return;
+  const input = document.getElementById(`slot-${state.activeInputIndex}`);
+  if (input) input.value = name;
+  closeAutocomplete();
+}
+
+function handleAutocompleteKeydown(e) {
+  if (autocompletePortalEl.classList.contains("hidden")) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (!state.activeAutocompleteItems.length) return;
+    state.activeAutocompleteSelection = (state.activeAutocompleteSelection + 1) % state.activeAutocompleteItems.length;
+    openAutocomplete(state.activeInputIndex, document.getElementById(`slot-${state.activeInputIndex}`).value);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!state.activeAutocompleteItems.length) return;
+    state.activeAutocompleteSelection = (state.activeAutocompleteSelection - 1 + state.activeAutocompleteItems.length) % state.activeAutocompleteItems.length;
+    openAutocomplete(state.activeInputIndex, document.getElementById(`slot-${state.activeInputIndex}`).value);
+  } else if (e.key === "Enter") {
+    if (state.activeAutocompleteSelection >= 0 && state.activeAutocompleteItems[state.activeAutocompleteSelection]) {
+      e.preventDefault();
+      selectAutocompleteFood(state.activeAutocompleteItems[state.activeAutocompleteSelection].name);
+    }
+  } else if (e.key === "Escape") {
+    closeAutocomplete();
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".autocomplete-wrap") && !e.target.closest("#autocompletePortal")) closeAutocomplete();
+});
 
 function renderPresets() {
   const presets = presetsForFoods(state.foods);
@@ -491,6 +477,15 @@ function renderPresets() {
   });
 }
 
+function renderScoringNotes() {
+  scoringNotesWrapEl.innerHTML = SCORE_DIMS.filter(([key]) => key !== "overall" && key !== "efficiency" ? true : true).map(([key, label]) => `
+    <article class="note-card">
+      <h3>${label}</h3>
+      <div class="small-muted">${SCORING_NOTES[key]}</div>
+    </article>
+  `).join("");
+}
+
 function clearResultsOnly() {
   resultsAreaEl.classList.add("hidden");
   selectionCardsEl.innerHTML = "";
@@ -504,62 +499,113 @@ function clearResultsOnly() {
   state.calculatedFoods = [];
 }
 
-function renderSelectedCards(selectedFoods, activeFoods) {
+function renderSelectedCards(selectedFoods) {
   selectionCardsEl.innerHTML = selectedFoods.map(food => {
-    const active = activeFoods.some(x => x.name === food.name && x.modifier === food.modifier);
+    const scores = deriveFoodScores(food);
+    const buffs = Object.values(deriveFoodBuffs(food)).map(meta => `<div class="small-muted">• ${meta.label}: ${formatBuffValue(meta.label, meta.value)}</div>`).join("");
     return `
-    <article class="recipe-card">
-      <div class="recipe-top">
-        ${iconMarkup(food.name, 'recipes')}
-        <div>
-          <div class="recipe-name">${food.name}</div>
-          <div class="meta-row">
-            <span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span>
-            <span class="badge">${food.bench}</span>
-            <span class="badge">${fmtMaybe(food.duration_s)}s</span>
-            ${!active && currentOptions().strict ? `<span class="badge">Refreshed only</span>` : ``}
+      <article class="recipe-card ${food.effective ? '' : 'recipe-card-muted'}">
+        <div class="recipe-top">
+          ${iconMarkup(food.name, 'recipes')}
+          <div>
+            <div class="recipe-name">${food.name}</div>
+            <div class="meta-row">
+              <span class="badge tier-${food.tier || 'none'}">${food.tier || '—'} Tier</span>
+              <span class="badge">${food.bench}</span>
+              <span class="badge">${fmtMaybe(food.duration_s)}s</span>
+              ${food.effective ? '' : '<span class="badge">Refreshed only</span>'}
+            </div>
           </div>
         </div>
-      </div>
-      <div class="small-muted">Overall ${fmtMaybe(food.derivedScores?.overall)} • Efficiency ${fmtMaybe(food.derivedScores?.efficiency)}</div>
-      <div class="recipe-qty">Craft quantity: x${fmtMaybe(food.craftQty)}</div>
-      <div class="small-muted">Modifier / effect family: ${food.modifier || food.name}</div>
-      ${food.notes ? `<div class="small-muted">${food.notes}</div>` : ``}
-      <div class="buff-list">
-        ${(food.adjustedBuffs || []).map(buff => `<div class="buff-line"><strong>${buff.label}:</strong> ${fmtMaybe(buff.value)}</div>`).join("")}
-      </div>
-    </article>`;
+        <div class="small-muted">Overall ${fmtMaybe(scores.overall)} • Efficiency ${fmtMaybe(scores.efficiency)}</div>
+        <div class="recipe-qty">Craft quantity: x${fmtMaybe(food.craftQty)}</div>
+        <div class="small-muted">Modifier / effect family: ${food.modifier || food.name}</div>
+        <div class="small-muted"><strong>Key buffs</strong></div>
+        ${buffs}
+        ${food.notes ? `<div class="small-muted">${food.notes}</div>` : ''}
+      </article>
+    `;
   }).join("");
 
-  const duplicates = findStrictDuplicates(selectedFoods);
-  if (duplicates.length && currentOptions().strict) {
+  const duplicateFamilies = selectedFoods.filter(f => !f.effective);
+  if (duplicateFamilies.length) {
     buffWarningEl.hidden = false;
-    buffWarningEl.innerHTML = `<strong>Strict mode:</strong> duplicate effect families refresh instead of stacking. Ignored for active build: ${duplicates.map(d => `${d.family} (${d.names.length} selected)`).join(" • ")}`;
+    buffWarningEl.innerHTML = `<strong>Strict-mode note:</strong> duplicate effect families do not stack in-game. ${duplicateFamilies.map(f => f.name).join(", ")} are treated as refresh-only in the active build score.`;
   } else {
     buffWarningEl.hidden = true;
   }
 }
 
-function renderCombinedBuffs(activeFoods) {
-  const totals = sumBuffs(activeFoods);
-  let rows = getAllBuffKeys(activeFoods).map(item => ({ key: item.key, label: item.label, value: totals[item.key] || 0 }));
+function buildGroupedBuffRows(selectedFoods) {
+  const totals = sumBuffs(selectedFoods);
+  let rows = getAllBuffKeys(selectedFoods).map(item => ({ key: item.key, label: item.label, value: totals[item.key] || 0 }));
   if (hideZeroBuffsEl.checked) rows = rows.filter(r => r.value !== 0);
-  if (sortBuffsEl.checked) rows.sort((a, b) => Math.abs(b.value) - Math.abs(a.value) || a.label.localeCompare(b.label));
-  buffChipsEl.innerHTML = rows.slice(0, 8).map(row => `<span class="chip">${row.label}: ${fmtMaybe(row.value)}</span>`).join("");
-  buffsTableWrapEl.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Buff</th><th class="number">Total</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.label}</td><td class="number">${fmtMaybe(row.value)}</td></tr>`).join("")}</tbody></table></div>`;
+  if (sortBuffsEl.checked) rows.sort((a,b)=>Math.abs(b.value)-Math.abs(a.value) || a.label.localeCompare(b.label));
+  const groups = {};
+  BUFF_GROUPS.forEach(([key,label]) => groups[key] = { label, rows: [] });
+  rows.forEach(row => {
+    const cats = buffCategoriesForLabel(row.label);
+    const cat = cats[0] || "other";
+    groups[cat].rows.push(row);
+  });
+  return groups;
 }
 
-function renderScores(activeFoods) {
+function getAllBuffKeys(selectedFoods) {
+  const map = new Map();
+  selectedFoods.forEach(food => {
+    if (!food.effective) return;
+    Object.entries(deriveFoodBuffs(food)).forEach(([key, meta]) => map.set(key, meta.label || key));
+  });
+  return [...map.entries()].map(([key, label]) => ({ key, label }));
+}
+
+function renderCombinedBuffs(selectedFoods) {
+  const groups = buildGroupedBuffRows(selectedFoods);
+  const chipRows = [];
+  Object.values(groups).forEach(group => group.rows.slice(0, 3).forEach(r => chipRows.push(r)));
+  buffChipsEl.innerHTML = chipRows.slice(0, 10).map(row => `<span class="chip">${row.label}: ${formatBuffValue(row.label, row.value)}</span>`).join("");
+  buffsTableWrapEl.innerHTML = `
+    <div class="combined-groups">
+      ${Object.entries(groups).map(([key, group]) => {
+        if (!group.rows.length) return '';
+        return `
+          <section class="buff-group">
+            <div class="buff-group-header"><h3>${group.label}</h3><span class="badge">${group.rows.length} stats</span></div>
+            <div class="buff-group-body">
+              <div class="buff-list">
+                ${group.rows.map(row => `<div>${row.label}</div><div class="number">${formatBuffValue(row.label, row.value)}</div>`).join("")}
+              </div>
+            </div>
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function buildScoresForSelection(selectedFoods) {
   const totals = Object.fromEntries(SCORE_DIMS.map(([key]) => [key, 0]));
-  activeFoods.forEach(food => SCORE_DIMS.forEach(([key]) => totals[key] += Number(food.derivedScores?.[key] || 0)));
+  selectedFoods.forEach(food => {
+    if (!food.effective) return;
+    const scores = deriveFoodScores(food);
+    ["survival","melee","ranged","exploration","xp_support","utility"].forEach(key => { totals[key] += Number(scores[key] || 0); });
+  });
+  totals.overall = totals.survival * 0.30 + totals.melee * 0.18 + totals.ranged * 0.18 + totals.exploration * 0.17 + totals.xp_support * 0.07 + totals.utility * 0.10;
+  totals.efficiency = totals.overall / Math.max(1, selectedFoods.filter(f => f.effective).reduce((acc,f)=>acc + Number(f.ingredient_count || (f.ingredients||[]).length || 1), 0) / Math.max(1, selectedFoods.filter(f=>f.effective).length));
+  return totals;
+}
+
+function renderScores(selectedFoods) {
+  const totals = buildScoresForSelection(selectedFoods);
   scoreCardsEl.innerHTML = SCORE_DIMS.map(([key, label]) => `<article class="score-card"><div class="score-name">${label}</div><div class="score-value">${fmtMaybe(totals[key])}</div></article>`).join("");
-  const sorted = [...SCORE_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).map(([key, label]) => ({ key, label, value: totals[key] }));
-  const topBench = Object.entries(activeFoods.reduce((acc, food) => { acc[food.bench] = (acc[food.bench] || 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1])[0];
+  const sorted = [...SCORE_DIMS].filter(([k]) => !["overall","efficiency"].includes(k)).sort((a, b) => totals[b[0]] - totals[a[0]]).map(([key, label]) => ({ key, label, value: totals[key] }));
+  const topBench = Object.entries(selectedFoods.filter(f=>f.effective).reduce((acc, food) => { acc[food.bench] = (acc[food.bench] || 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1])[0];
   buildInsightsEl.innerHTML = `
     <div class="insight"><strong>Primary archetype:</strong> ${sorted[0].label} (${fmtMaybe(sorted[0].value)})</div>
     <div class="insight"><strong>Secondary strength:</strong> ${sorted[1].label} (${fmtMaybe(sorted[1].value)})</div>
-    <div class="insight"><strong>Bench profile:</strong> ${topBench ? `${topBench[0]} heavy` : 'Mixed'} • ${activeFoods.length} active effects</div>
-    <div class="insight"><strong>Scoring basis:</strong> ${currentOptions().carnivore ? 'Carnivore ON' : 'Carnivore OFF'} • ${currentOptions().ignoreConsume ? 'Consume stats ignored' : 'Consume stats counted'} • ${currentOptions().strict ? 'Strict mode active' : 'Free theorycraft mode'}</div>
+    <div class="insight"><strong>Bench profile:</strong> ${topBench ? `${topBench[0]} heavy` : 'Mixed'} • ${selectedFoods.filter(f=>f.effective).length} active effects</div>
+    <div class="insight"><strong>Scoring basis:</strong> Carnivore ${isCarnivoreOn() ? 'ON' : 'OFF'} • Consume stats ${ignoreConsumeStats() ? 'ignored' : 'included'} • ${strictModeEl.checked ? 'Strict in-game mode' : 'Free theorycraft mode'}</div>
   `;
 }
 
@@ -574,37 +620,71 @@ function renderShopping(selectedFoods) {
       </tr>`).join("")}</tbody></table></div>`;
 }
 
+function renderTopBuilds(targetKey = archetypeSelectEl.value) {
+  const builds = buildSuggestionsForArchetype(targetKey);
+  topBuildsWrapEl.innerHTML = `<div class="top-builds-grid">${builds.map(build => {
+    const scores = buildScoresForSelection(build.foods.map(f => ({...f, craftQty:1, effective:true})));
+    return `
+      <article class="build-suggestion">
+        <h3>${build.label} ${targetKey === 'overall' ? 'All-round' : titleize(targetKey)} Build</h3>
+        <div class="build-tags"><span class="badge">${build.description}</span><span class="badge">Overall ${fmtMaybe(scores.overall)}</span></div>
+        <div class="small-muted">${build.foods.map(f => f.name).join(" • ")}</div>
+      </article>
+    `;
+  }).join("")}</div>`;
+}
+
+function titleize(key) {
+  const map = {xp_support:"XP / Support"};
+  return map[key] || String(key).replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
+}
+
 function renderRankings() {
   const limit = Number(rankingLimitEl.value || 20);
-  const rows = [...state.foods].sort((a, b) => (b.derivedScores?.overall || 0) - (a.derivedScores?.overall || 0)).slice(0, limit);
-  rankingsWrapEl.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr><th>#</th><th>Recipe</th><th>Bench</th><th>Tier</th><th class="number">Overall</th><th class="number">Efficiency</th><th class="number">Survival</th><th class="number">Melee</th><th class="number">Ranged</th><th class="number">Exploration</th></tr></thead><tbody>${rows.map((food, idx) => `
+  if (rankingViewModeEl.value === "builds") {
+    const archetypes = ["overall","survival","melee","ranged","exploration","xp_support","efficiency"];
+    rankingsWrapEl.innerHTML = archetypes.map(key => {
+      const builds = buildSuggestionsForArchetype(key);
+      return `
+        <section class="buff-group" style="margin-bottom:14px">
+          <div class="buff-group-header"><h3>${key === "overall" ? "All-round" : titleize(key)} top builds</h3></div>
+          <div class="buff-group-body">
+            ${builds.slice(0,3).map(build => `<div class="small-muted" style="margin-bottom:10px"><strong>${build.label}:</strong> ${build.foods.map(f => f.name).join(" • ")}</div>`).join("")}
+          </div>
+        </section>`;
+    }).join("");
+    return;
+  }
+
+  const rows = [...state.foods].map(food => ({ food, scores: deriveFoodScores(food) })).sort((a, b) => (b.scores?.overall || 0) - (a.scores?.overall || 0)).slice(0, limit);
+  rankingsWrapEl.innerHTML = `<div class="table-wrap rankings-table"><table><thead><tr><th>#</th><th>Recipe</th><th>Bench</th><th>Tier</th><th class="number">Overall</th><th class="number">Efficiency</th><th class="number">Survival</th><th class="number">Melee</th><th class="number">Ranged</th><th class="number">Exploration</th></tr></thead><tbody>${rows.map((row, idx) => `
     <tr>
       <td class="rank-cell">${idx + 1}</td>
-      <td><div class="recipe-cell">${iconMarkup(food.name, 'recipes', 'ingredient-mini')}<span>${food.name}</span></div></td>
-      <td>${food.bench}</td>
-      <td><span class="badge tier-${food.tier || 'none'}">${food.tier || '—'}</span></td>
-      <td class="number">${fmtMaybe(food.derivedScores?.overall)}</td>
-      <td class="number">${fmtMaybe(food.derivedScores?.efficiency)}</td>
-      <td class="number">${fmtMaybe(food.derivedScores?.survival)}</td>
-      <td class="number">${fmtMaybe(food.derivedScores?.melee)}</td>
-      <td class="number">${fmtMaybe(food.derivedScores?.ranged)}</td>
-      <td class="number">${fmtMaybe(food.derivedScores?.exploration)}</td>
+      <td><div class="recipe-cell">${iconMarkup(row.food.name, 'recipes', 'ingredient-mini')}<span>${row.food.name}</span></div></td>
+      <td>${row.food.bench}</td>
+      <td><span class="badge tier-${row.food.tier || 'none'}">${row.food.tier || '—'}</span></td>
+      <td class="number">${fmtMaybe(row.scores.overall)}</td>
+      <td class="number">${fmtMaybe(row.scores.efficiency)}</td>
+      <td class="number">${fmtMaybe(row.scores.survival)}</td>
+      <td class="number">${fmtMaybe(row.scores.melee)}</td>
+      <td class="number">${fmtMaybe(row.scores.ranged)}</td>
+      <td class="number">${fmtMaybe(row.scores.exploration)}</td>
     </tr>`).join("")}</tbody></table></div>`;
 }
 
-function buildSummaryText(selectedFoods, activeFoods) {
-  const totals = Object.fromEntries(SCORE_DIMS.map(([key]) => [key, 0]));
-  activeFoods.forEach(food => SCORE_DIMS.forEach(([key]) => totals[key] += Number(food.derivedScores?.[key] || 0)));
-  const archetypes = [...SCORE_DIMS].sort((a, b) => totals[b[0]] - totals[a[0]]).slice(0, 3).map(([key, label]) => `${label}: ${fmtMaybe(totals[key])}`);
-
+function buildSummaryText(selectedFoods) {
+  const activeFoods = selectedFoods.filter(f=>f.effective);
+  const totals = buildScoresForSelection(selectedFoods);
+  const archetypes = ["survival","melee","ranged","exploration","xp_support","utility"].sort((a,b)=>totals[b]-totals[a]).slice(0,3).map(key => `${titleize(key)}: ${fmtMaybe(totals[key])}`);
   return [
     `Icarus Food Calculator — Build Summary`,
     `Created by fernandobacate`,
-    `Carnivore: ${currentOptions().carnivore ? "On" : "Off"} • Strict: ${currentOptions().strict ? "On" : "Off"} • Ignore consume stats: ${currentOptions().ignoreConsume ? "On" : "Off"}`,
     "",
-    ...selectedFoods.map((food, idx) => `${idx + 1}. ${food.name} x${fmtMaybe(food.craftQty)} — ${food.bench} — Overall ${fmtMaybe(food.derivedScores?.overall)} — Modifier ${food.modifier || food.name}`),
+    `Carnivore: ${isCarnivoreOn() ? 'On' : 'Off'}`,
+    `Strict mode: ${strictModeEl.checked ? 'On' : 'Off'}`,
     "",
-    `Active effect families counted: ${activeFoods.map(f => f.modifier || f.name).join(", ")}`,
+    ...selectedFoods.map((food, idx) => `${idx + 1}. ${food.name} x${fmtMaybe(food.craftQty)} — ${food.bench}${food.effective ? '' : ' (refresh only in strict mode)'}`),
+    "",
     `Top dimensions: ${archetypes.join(' • ')}`
   ].join("\n");
 }
@@ -619,6 +699,19 @@ function shoppingText(selectedFoods) {
   ].join("\n");
 }
 
+function currentShareURL() {
+  const parts = [];
+  parts.push(`c=${isCarnivoreOn() ? '1' : '0'}`);
+  parts.push(`s=${strictModeEl.checked ? '1' : '0'}`);
+  parts.push(`i=${ignoreConsumeStats() ? '1' : '0'}`);
+  const build = getDraftSelection().map(food => {
+    const qty = document.getElementById(`slot-qty-${getDraftSelection().findIndex(f=>f.name===food.name)}`)?.value || 1;
+    return `${encodeURIComponent(food.name)}~${qty}`;
+  }).join("|");
+  parts.push(`build=${build}`);
+  return `${location.origin}${location.pathname}?${parts.join("&")}`;
+}
+
 async function copyText(text, successLabel, fallbackLabel) {
   try {
     await navigator.clipboard.writeText(text);
@@ -628,8 +721,8 @@ async function copyText(text, successLabel, fallbackLabel) {
   }
 }
 
-function triggerDownload(filename, text) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -638,50 +731,19 @@ function triggerDownload(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function currentShareUrl() {
-  const params = new URLSearchParams();
-  params.set("carnivore", currentOptions().carnivore ? "1" : "0");
-  params.set("strict", currentOptions().strict ? "1" : "0");
-  params.set("ignoreConsume", currentOptions().ignoreConsume ? "1" : "0");
-  const entries = [];
-  for (let i = 0; i < 5; i++) {
-    const input = document.getElementById(`slot-${i}`);
-    const qtyInput = document.getElementById(`slot-qty-${i}`);
-    const val = (input?.value || "").trim();
-    if (!val) continue;
-    entries.push(`${encodeURIComponent(val)}~${encodeURIComponent(qtyInput?.value || 1)}`);
-  }
-  if (entries.length) params.set("build", entries.join("|"));
-  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-}
-
-function applyUrlState() {
-  const params = new URLSearchParams(window.location.search);
-  carnivoreToggleEl.value = params.get("carnivore") === "1" ? "on" : "off";
-  strictModeEl.checked = params.get("strict") === "1";
-  ignoreConsumeStatsEl.checked = params.get("ignoreConsume") !== "0";
-}
-
-function getPreserveState() {
-  return Array.from({ length: 5 }, (_, i) => ({
-    name: document.getElementById(`slot-${i}`)?.value || "",
-    qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1)
-  }));
-}
-
 function calculateAll() {
   const selectedFoods = getDraftSelection();
   if (!selectedFoods.length) {
     clearResultsOnly();
     return;
   }
-  const activeFoods = getActiveFoods(selectedFoods);
+  const effectiveFoods = getEffectiveFoods(selectedFoods);
   state.calculated = true;
-  state.calculatedFoods = selectedFoods;
+  state.calculatedFoods = effectiveFoods;
   resultsAreaEl.classList.remove("hidden");
-  renderSelectedCards(selectedFoods, activeFoods);
-  renderCombinedBuffs(activeFoods);
-  renderScores(activeFoods);
+  renderSelectedCards(effectiveFoods);
+  renderCombinedBuffs(effectiveFoods);
+  renderScores(effectiveFoods);
   renderShopping(selectedFoods);
 }
 
@@ -690,129 +752,90 @@ function clearAll() {
   renderPresets();
   renderSelectors(Array.from({ length: 5 }, () => ({ name: "", qty: 1 })));
   clearResultsOnly();
-  history.replaceState({}, "", window.location.pathname);
+  closeAutocomplete();
 }
 
 function fillRandomBuild() {
-  const pool = [...state.foods].sort((a, b) => (b.derivedScores?.overall || 0) - (a.derivedScores?.overall || 0)).slice(0, 25);
-  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
-  const preserve = shuffled.map(food => ({ name: food.name, qty: 1 }));
+  const pool = buildSuggestedFoods(archetypeSelectEl.value || "overall", "premium", 5);
+  const preserve = pool.map(food => ({ name: food.name, qty: 1 }));
   state.currentPreset = null;
   renderPresets();
   renderSelectors(preserve);
   calculateAll();
 }
 
-function fillOptimalBuild() {
-  const pool = [...state.foods].sort((a,b)=>b.derivedScores.overall-a.derivedScores.overall);
-  const picked = [];
-  const seen = new Set();
-  for (const food of pool) {
-    const family = String(food.modifier || food.name).toLowerCase();
-    if (currentOptions().strict && seen.has(family)) continue;
-    picked.push(food);
-    seen.add(family);
-    if (picked.length >= 5) break;
-  }
-  const preserve = picked.map(food => ({ name: food.name, qty: 1 }));
-  state.currentPreset = null;
-  renderPresets();
-  renderSelectors(preserve);
-  calculateAll();
-}
-
-function recalcAllUi(preserve = null) {
-  refreshDerivedFoods();
-  renderKPIs();
-  renderFilters();
-  renderPresets();
-  renderSelectors(preserve || getPreserveState());
-  renderRankings();
-  if (state.calculated) calculateAll();
-  footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • carnivore-aware • strict in-game logic • shareable build links`;
-}
-
-async function exportBuildPng() {
-  const target = document.getElementById("resultsArea");
-  if (!state.calculated || !target || typeof html2canvas === "undefined") {
-    alert("Calculate a build first.");
-    return;
-  }
-  const canvas = await html2canvas(target, { backgroundColor: "#0b0f17", scale: 2 });
-  const url = canvas.toDataURL("image/png");
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "icarus-food-build.png";
-  a.click();
+function loadFromURL() {
+  const params = new URLSearchParams(location.search);
+  carnivoreModeEl.value = params.get("c") === "1" ? "on" : "off";
+  strictModeEl.checked = params.get("s") === "1";
+  ignoreConsumeStatsEl.checked = params.get("i") !== "0";
+  const build = params.get("build");
+  if (!build) return Array.from({length:5},()=>({name:"",qty:1}));
+  const parts = build.split("|").filter(Boolean).slice(0,5);
+  const preserve = parts.map(part => {
+    const [encodedName, qty] = part.split("~");
+    return { name: decodeURIComponent(encodedName || ""), qty: Number(qty || 1) || 1 };
+  });
+  while (preserve.length < 5) preserve.push({name:"", qty:1});
+  return preserve;
 }
 
 async function loadFoods() {
   const response = await fetch('./foods.json');
   state.data = await response.json();
-  applyUrlState();
-  refreshDerivedFoods();
-  renderKPIs();
+  state.foods = state.data.foods;
   renderFilters();
+  renderScoringNotes();
+  renderKPIs();
   renderPresets();
-
-  const params = new URLSearchParams(window.location.search);
-  const buildParam = params.get("build");
-  let preserve = Array.from({ length: 5 }, () => ({ name: "", qty: 1 }));
-  if (buildParam) {
-    preserve = buildParam.split("|").slice(0,5).map(chunk => {
-      const [name, qty] = chunk.split("~");
-      return { name: decodeURIComponent(name || ""), qty: Number(decodeURIComponent(qty || "1")) || 1 };
-    });
-    while (preserve.length < 5) preserve.push({ name: "", qty: 1 });
-  }
+  const preserve = loadFromURL();
   renderSelectors(preserve);
+  renderTopBuilds();
   renderRankings();
   clearResultsOnly();
-  footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • carnivore-aware • strict in-game logic • shareable build links`;
-  if (buildParam) calculateAll();
+  if (preserve.some(p => p.name)) calculateAll();
+  footerMetaEl.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • archetype-aware planner and build explorer`;
 }
 
 benchFilterEl.addEventListener('change', () => {
-  renderSelectors(getPreserveState());
+  const preserve = Array.from({ length: 5 }, (_, i) => ({ name: document.getElementById(`slot-${i}`)?.value || "", qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1) }));
+  renderSelectors(preserve);
 });
 sortFoodsEl.addEventListener('change', () => {
-  renderSelectors(getPreserveState());
+  const preserve = Array.from({ length: 5 }, (_, i) => ({ name: document.getElementById(`slot-${i}`)?.value || "", qty: Number(document.getElementById(`slot-qty-${i}`)?.value || 1) }));
+  renderSelectors(preserve);
 });
+carnivoreModeEl.addEventListener('change', () => { renderKPIs(); renderPresets(); renderTopBuilds(); renderRankings(); if (state.calculated) calculateAll(); });
+ignoreConsumeStatsEl.addEventListener('change', () => { renderPresets(); renderTopBuilds(); renderRankings(); if (state.calculated) calculateAll(); });
+strictModeEl.addEventListener('change', () => { if (state.calculated) calculateAll(); });
 rankingLimitEl.addEventListener('change', renderRankings);
-hideZeroBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(getActiveFoods(state.calculatedFoods)));
-sortBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(getActiveFoods(state.calculatedFoods)));
-carnivoreToggleEl.addEventListener('change', () => recalcAllUi());
-strictModeEl.addEventListener('change', () => state.calculated && calculateAll());
-ignoreConsumeStatsEl.addEventListener('change', () => recalcAllUi());
-calculateBtn.addEventListener('click', () => {
-  calculateAll();
-  history.replaceState({}, "", currentShareUrl());
-});
+rankingViewModeEl.addEventListener('change', renderRankings);
+hideZeroBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(state.calculatedFoods));
+sortBuffsEl.addEventListener('change', () => state.calculated && renderCombinedBuffs(state.calculatedFoods));
+calculateBtn.addEventListener('click', calculateAll);
 clearBtn.addEventListener('click', clearAll);
 randomBuildBtn.addEventListener('click', fillRandomBuild);
-optimalBuildBtn.addEventListener('click', fillOptimalBuild);
+generateBuildsBtn.addEventListener('click', renderTopBuilds);
+archetypeSelectEl.addEventListener('change', renderTopBuilds);
 
 copySummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
-  const activeFoods = getActiveFoods(state.calculatedFoods);
-  copyText(buildSummaryText(state.calculatedFoods, activeFoods), () => { copySummaryBtn.textContent = 'Summary copied'; setTimeout(() => copySummaryBtn.textContent = 'Copy build summary', 1400); }, 'Clipboard blocked. Copy manually:');
+  copyText(buildSummaryText(state.calculatedFoods), () => { copySummaryBtn.textContent = 'Summary copied'; setTimeout(() => copySummaryBtn.textContent = 'Copy build summary', 1400); }, 'Clipboard blocked. Copy manually:');
 });
 copyShoppingBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
-  copyText(shoppingText(state.calculatedFoods), () => { copyShoppingBtn.textContent = 'Shopping copied'; setTimeout(() => copyShoppingBtn.textContent = 'Copy shopping list', 1400); }, 'Clipboard blocked. Copy manually:');
+  copyText(shoppingText(getDraftSelection()), () => { copyShoppingBtn.textContent = 'Shopping copied'; setTimeout(() => copyShoppingBtn.textContent = 'Copy shopping list', 1400); }, 'Clipboard blocked. Copy manually:');
 });
 copyLinkBtn.addEventListener('click', () => {
-  const url = currentShareUrl();
-  copyText(url, () => { copyLinkBtn.textContent = 'Link copied'; setTimeout(() => copyLinkBtn.textContent = 'Copy build link', 1400); }, 'Copy this link manually:');
+  copyText(currentShareURL(), () => { copyLinkBtn.textContent = 'Link copied'; setTimeout(() => copyLinkBtn.textContent = 'Copy build link', 1400); }, 'Clipboard blocked. Copy manually:');
 });
 downloadSummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
-  triggerDownload('icarus-food-build-summary.txt', buildSummaryText(state.calculatedFoods, getActiveFoods(state.calculatedFoods)));
+  downloadTextFile('icarus-build-summary.txt', buildSummaryText(state.calculatedFoods));
 });
 downloadShoppingBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
-  triggerDownload('icarus-food-shopping-list.txt', shoppingText(state.calculatedFoods));
+  downloadTextFile('icarus-shopping-list.txt', shoppingText(getDraftSelection()));
 });
-exportPngBtn.addEventListener('click', exportBuildPng);
 
 loadFoods();

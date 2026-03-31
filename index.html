@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Icarus Food Calculator</title>
-  <meta name="description" content="Advanced Icarus food combo calculator with rankings, buffs, shopping list, carnivore toggle, strict in-game logic, custom autocomplete, and export-ready summaries.">
+  <meta name="description" content="Advanced Icarus food combo calculator with archetype-focused builds, grouped buffs, Carnivore toggle, shopping list, and shareable links.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,21 +13,19 @@
 <body>
   <div class="page-bg-fixed"></div>
   <div class="bg-grid"></div>
-
   <main class="shell">
     <header class="hero">
       <div class="eyebrow">ICARUS • COMMUNITY TOOL</div>
       <h1>Icarus Food Calculator</h1>
-      <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and export a clean summary for Discord or the wiki workflow.</p>
+      <p class="hero-copy">Build your ideal 5-food stack, compare top recipes, generate a full shopping list, and create archetype-focused build suggestions for the Icarus community.</p>
       <div class="hero-actions">
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
-        <button class="ghost-btn" id="optimalBuildBtn">Generate optimal build</button>
+        <button class="ghost-btn" id="generateBuildsBtn">Generate optimal builds</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
         <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
         <button class="ghost-btn" id="downloadSummaryBtn">Download summary</button>
-        <button class="ghost-btn" id="downloadShoppingBtn">Download shopping list</button>
-        <button class="ghost-btn" id="exportPngBtn">Export build as PNG</button>
+        <button class="ghost-btn" id="downloadShoppingBtn">Download shopping</button>
       </div>
     </header>
 
@@ -37,24 +35,25 @@
       <div class="panel-header">
         <div>
           <h2>Build Planner</h2>
-          <p>Pick up to 5 foods, set craft quantities, browse the full recipe list on click, and calculate the final result only when you are ready. In strict mode, duplicate effect families do not stack — they only refresh the same effect.</p>
+          <p>Pick up to 5 foods, set craft quantities, browse the full recipe list on click, and calculate only when you are ready. In strict mode, duplicate status-effect families do not stack — they only refresh the same effect.</p>
         </div>
         <div class="toggles">
-          <label class="switch inline"><span>Carnivore talent</span>
-            <select id="carnivoreToggle">
-              <option value="off" selected>Off</option>
-              <option value="on">On</option>
-            </select>
-          </label>
           <label class="switch"><input type="checkbox" id="strictMode"><span>Strict in-game mode</span></label>
-          <label class="switch"><input type="checkbox" id="ignoreConsumeStats" checked><span>Ignore consume stats in score</span></label>
+          <label class="switch"><input type="checkbox" id="ignoreConsumeStats" checked><span>Ignore consume stats in scoring</span></label>
           <label class="switch"><input type="checkbox" id="hideZeroBuffs" checked><span>Hide zero rows</span></label>
           <label class="switch"><input type="checkbox" id="sortBuffs" checked><span>Sort buffs</span></label>
         </div>
       </div>
 
-      <div class="toolbar">
+      <div class="toolbar toolbar-planner">
         <div class="toolbar-left">
+          <label>
+            <span>Carnivore talent</span>
+            <select id="carnivoreMode">
+              <option value="off" selected>Off</option>
+              <option value="on">On</option>
+            </select>
+          </label>
           <label>
             <span>Filter bench</span>
             <select id="benchFilter"></select>
@@ -87,23 +86,33 @@
 
       <div id="selectors" class="selectors"></div>
       <div class="hint-row">Click any slot to browse all recipes, or start typing to filter instantly.</div>
+      <div id="autocompletePortal" class="autocomplete-portal hidden"></div>
     </section>
 
-    <section class="panel scoring-panel">
+    <section class="panel build-generator-panel">
       <div class="panel-header">
         <div>
-          <h2>Scoring notes</h2>
-          <p>The app uses transparent heuristic buckets instead of a single black-box score. Higher numbers mean the recipe contributes more to that playstyle, not that it is universally best in every context.</p>
+          <h2>Optimal Build Generator</h2>
+          <p>Choose an archetype and style to generate multiple suggested builds rather than a single arbitrary combo.</p>
         </div>
       </div>
-      <div class="score-notes-grid">
-        <article class="score-note"><h3>Survival</h3><p>Health, stamina, regen, resistances, and sustain.</p></article>
-        <article class="score-note"><h3>Melee</h3><p>Melee damage, melee speed, melee return, and close-range survivability.</p></article>
-        <article class="score-note"><h3>Ranged</h3><p>Projectile damage, reload speed, charge speed, and critical damage.</p></article>
-        <article class="score-note"><h3>Exploration</h3><p>Oxygen, water, food economy, cave/exposure utility, and mission convenience.</p></article>
-        <article class="score-note"><h3>XP / Support</h3><p>XP gain, shared XP, tamed creature XP, and team-facing value.</p></article>
-        <article class="score-note"><h3>Efficiency</h3><p>Value per recipe complexity. It rewards efficient output, not just raw power.</p></article>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <label>
+            <span>Target archetype</span>
+            <select id="archetypeSelect">
+              <option value="overall">All-round</option>
+              <option value="survival">Survival</option>
+              <option value="melee">Melee</option>
+              <option value="ranged">Ranged</option>
+              <option value="exploration">Exploration</option>
+              <option value="xp_support">XP / Support</option>
+              <option value="efficiency">Efficiency</option>
+            </select>
+          </label>
+        </div>
       </div>
+      <div id="topBuildsWrap"></div>
     </section>
 
     <section id="resultsArea" class="results-stack hidden">
@@ -111,7 +120,7 @@
         <div class="panel-header">
           <div>
             <h2>Selected Recipes</h2>
-            <p>Final calculated selection, recipe notes, detailed buffs, and quick metadata for the current build.</p>
+            <p>Final calculated selection, recipe notes, full individual buff breakdown, and quick metadata for the current build.</p>
           </div>
         </div>
         <div id="selectionCards" class="selection-cards"></div>
@@ -136,28 +145,47 @@
         <div class="panel-header">
           <div>
             <h2>Shopping List</h2>
-            <p>Aggregated ingredients for the selected recipes. Quantities reflect exactly what you selected, even when strict mode ignores duplicate effect families in the active build.</p>
+            <p>Aggregated ingredients for the selected recipes. Quantities reflect exactly what you selected.</p>
           </div>
         </div>
         <div id="shoppingWrap"></div>
+      </section>
+
+      <section class="panel info-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Scoring notes</h2>
+            <p>The app uses transparent heuristic buckets instead of a single black-box score. Use these notes to understand what each number is actually trying to represent.</p>
+          </div>
+        </div>
+        <div id="scoringNotesWrap" class="scoring-notes-grid"></div>
       </section>
     </section>
 
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h2>Recipe Rankings</h2>
-          <p>Scout strong recipes before building a combo. Rankings update from your selected options, including Carnivore and consume-stat handling.</p>
+          <h2>Rankings & Build Explorer</h2>
+          <p>Switch between individual recipe rankings and precomputed top builds for each archetype.</p>
         </div>
-        <label>
-          <span>Show top</span>
-          <select id="rankingLimit">
-            <option>10</option>
-            <option selected>20</option>
-            <option>30</option>
-            <option>50</option>
-          </select>
-        </label>
+        <div class="toolbar-right">
+          <label>
+            <span>View mode</span>
+            <select id="rankingViewMode">
+              <option value="recipes" selected>Recipes</option>
+              <option value="builds">Builds</option>
+            </select>
+          </label>
+          <label>
+            <span>Show top</span>
+            <select id="rankingLimit">
+              <option>10</option>
+              <option selected>20</option>
+              <option>30</option>
+              <option>50</option>
+            </select>
+          </label>
+        </div>
       </div>
       <div id="rankingsWrap"></div>
     </section>
@@ -170,8 +198,6 @@
       <span id="footerMeta"></span>
     </footer>
   </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
