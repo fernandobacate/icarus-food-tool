@@ -111,7 +111,9 @@ function currentSettingsLabel() {
   return `Carnivore ${isCarnivoreOn() ? 'ON' : 'OFF'} • ${els.ignoreConsumeStats.checked ? 'Consume stats ignored' : 'Consume stats included'} • ${els.strictMode.checked ? 'Strict in-game mode' : 'Free theorycraft mode'}`;
 }
 function selectedSlotCount() {
-  return Number(els.stomachSlots?.value || 0);
+  const raw = els.stomachSlots?.value ?? els.stomachSlots?.selectedOptions?.[0]?.value ?? "";
+  const num = Number(raw);
+  return Number.isFinite(num) ? num : 0;
 }
 function effectivePlannerSlotCount() {
   return Math.max(selectedSlotCount(), document.querySelectorAll('.slot').length || 0);
@@ -196,9 +198,17 @@ function bySelectedSort(a, b, mode) {
   if (mode === "name") return a.name.localeCompare(b.name);
   return (targetScore(b, mode) || 0) - (targetScore(a, mode) || 0) || a.name.localeCompare(b.name);
 }
+function deriveBenchList() {
+  const metaBenches = state.data?.meta?.benches && Object.keys(state.data.meta.benches).length
+    ? Object.keys(state.data.meta.benches)
+    : [...new Set((state.foods || []).map(f => f.bench).filter(Boolean))];
+  return ["All", ...metaBenches.sort((a,b)=>a.localeCompare(b))];
+}
 function renderFilters() {
-  const benches = ["All", ...Object.keys(state.data.meta.benches).sort()];
+  const previous = els.benchFilter?.value || "All";
+  const benches = deriveBenchList();
   els.benchFilter.innerHTML = benches.map(b => `<option value="${b}">${b}</option>`).join("");
+  els.benchFilter.value = benches.includes(previous) ? previous : "All";
 }
 function applyFoodFilter() {
   const bench = els.benchFilter.value || "All";
@@ -884,13 +894,11 @@ async function drawCategoryIconOrFallback(ctx, cat, x, y, size=34) {
     drawText(ctx, fallback, x + 9, y + 23, {font:'20px Inter, Arial, sans-serif', color:'#f2ddb0'});
   }
 }
-async 
-function exportBuildAsPng() {
+async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
-
   const selectedFoods = state.calculatedFoods;
   const activeFoods = aggregateEffectFoods(selectedFoods);
-  const shopping = aggregateIngredients(selectedFoods).slice(0, 18);
+  const shopping = aggregateIngredients(selectedFoods).slice(0, 16);
   const buffTotals = sumBuffs(activeFoods);
   const categorized = {};
   CATEGORY_ORDER.forEach(cat => categorized[cat] = []);
@@ -899,204 +907,125 @@ function exportBuildAsPng() {
     if (!categorized[cat]) categorized[cat] = [];
     categorized[cat].push({label, value});
   });
-
   const metrics = activeFoods.reduce((acc, food) => {
-    Object.entries(food.computedScores || {}).forEach(([k, v]) => {
-      acc[k] = (acc[k] || 0) + Number(v || 0);
-    });
+    Object.entries(food.computedScores || {}).forEach(([k,v]) => { acc[k] = (acc[k] || 0) + Number(v || 0); });
     return acc;
   }, {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0});
 
-  const width = 1800;
-  const margin = 40;
-  const gap = 24;
-  const leftX = 40;
-  const leftW = 860;
-  const rightX = leftX + leftW + gap;
-  const rightW = width - rightX - margin;
-
-  const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width = width;
-  tmpCanvas.height = 2200;
-  const ctx = tmpCanvas.getContext('2d');
-
-  function textWidth(text, font='20px Inter, Arial, sans-serif') {
-    ctx.font = font;
-    return ctx.measureText(text).width;
-  }
-  function chipLayout(items, startX, maxX, font='20px Inter, Arial, sans-serif') {
-    let x = startX;
-    let rows = 1;
-    items.forEach(text => {
-      const w = textWidth(text, font) + 28;
-      if (x + w > maxX) {
-        rows += 1;
-        x = startX;
-      }
-      x += w + 8;
-    });
-    return rows;
-  }
-
-  // Pre-calc dynamic heights
-  const selectedHeaderH = 96;
-  const selectedRowH = 96;
-  const selectedH = selectedHeaderH + selectedFoods.length * selectedRowH + 30;
-
-  const scoreHeaderH = 66;
-  const scoreGridRows = 4;
-  const scoreGridH = scoreGridRows * 86;
-  const scoreH = scoreHeaderH + scoreGridH + 24;
-
-  const shoppingHeaderH = 70;
-  const shoppingRowH = 44;
-  const shoppingH = shoppingHeaderH + shopping.length * shoppingRowH + 26;
-
-  const leftPanelH = selectedH + gap + scoreH + gap + shoppingH + 24;
-
-  const categoryCards = [];
-  for (const cat of CATEGORY_ORDER) {
-    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value) === 0));
-    if (!list.length) continue;
-    const chipTexts = list.slice(0, 6).map(row => {
-      const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
-      return `${row.label}: ${valText}`;
-    });
-    const rows = chipLayout(chipTexts, 978, rightX + rightW - 26);
-    const cardH = 72 + rows * 46 + 18;
-    categoryCards.push({cat, list, cardH});
-  }
-  const rightHeaderH = 96;
-  const rightPanelH = rightHeaderH + categoryCards.reduce((acc, c) => acc + c.cardH + 16, 0) + 24;
-
-  const heroH = 180;
-  const contentY = 250;
-  const footerH = 56;
-  const height = Math.max(1600, contentY + Math.max(leftPanelH, rightPanelH) + footerH);
-
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const c = canvas.getContext('2d');
+  canvas.width = 1800; canvas.height = 1600;
+  const ctx = canvas.getContext('2d');
 
   // Background
-  c.fillStyle = '#07090f';
-  c.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#07090f';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
   const bgImg = await loadImageSafe('assets/bg/page-bg.jpg');
   if (bgImg) {
-    c.globalAlpha = 0.22;
-    c.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-    c.globalAlpha = 1;
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1;
   }
-  c.fillStyle = 'rgba(7,9,15,.84)';
-  c.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(7,9,15,.84)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Hero
-  fillRoundRect(c, 40, 36, 1720, heroH, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
+  // Hero card
+  fillRoundRect(ctx, 40, 36, 1720, 180, 28, 'rgba(20,24,34,.92)', 'rgba(199,155,57,.25)');
   const heroImg = await loadImageSafe('assets/bg/hero.png');
   if (heroImg) {
-    c.save();
-    roundRect(c, 40, 36, 1720, heroH, 28);
-    c.clip();
-    c.globalAlpha = 0.32;
-    c.drawImage(heroImg, 40, 36, 1720, heroH);
-    c.globalAlpha = 1;
-    c.restore();
+    ctx.save();
+    roundRect(ctx, 40, 36, 1720, 180, 28);
+    ctx.clip();
+    ctx.globalAlpha = 0.32;
+    ctx.drawImage(heroImg, 40, 36, 1720, 180);
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
-  drawText(c, 'ICARUS • COMMUNITY TOOL', 70, 72, {font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39'});
-  drawText(c, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
-  drawText(c, currentSettingsLabel(), 70, 170, {font:'22px Inter, Arial, sans-serif', color:'#e0c480'});
-  drawText(c, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, {font:'18px Inter, Arial, sans-serif', color:'#dfe4ea'});
+  drawText(ctx, 'ICARUS • COMMUNITY TOOL', 70, 72, {font:'bold 18px Inter, Arial, sans-serif', color:'#c79b39'});
+  drawText(ctx, 'Icarus Food Calculator — Build Snapshot', 70, 126, {font:'bold 54px Inter, Arial, sans-serif'});
+  drawText(ctx, currentSettingsLabel(), 70, 170, {font:'22px Inter, Arial, sans-serif', color:'#e0c480'});
+  drawText(ctx, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, {font:'18px Inter, Arial, sans-serif', color:'#dfe4ea'});
 
-  // Left column outer
-  fillRoundRect(c, leftX, contentY, leftW, leftPanelH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  let ly = contentY + 28;
-
-  // Selected recipes
-  drawText(c, 'Selected Recipes', leftX + 30, ly + 22, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(c, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, leftX + 30, ly + 58, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
-  ly += 84;
-  for (let i = 0; i < selectedFoods.length; i++) {
+  // Left column build
+  fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Selected Recipes', 70, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, 70, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
+  let y = 380;
+  for (let i=0; i<selectedFoods.length; i++) {
     const food = selectedFoods[i];
-    const rowY = ly + i * selectedRowH;
-    fillRoundRect(c, leftX + 25, rowY, leftW - 50, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
-    await drawIconOrFallback(c, food.name, 'recipes', leftX + 42, rowY + 20, 42);
-    drawText(c, `${i + 1}. ${food.name}`, leftX + 98, rowY + 36, {font:'bold 28px Inter, Arial, sans-serif'});
-    drawText(c, `${food.bench} • x${food.craftQty} craft`, leftX + 98, rowY + 64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+    fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
+    await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
+    drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
+    drawText(ctx, `${food.bench} • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
     const fam = effectFamily(food);
     const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
     const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
-    const noteFont = '18px Inter, Arial, sans-serif';
-    const noteX = leftX + leftW - 40 - textWidth(note, noteFont);
-    drawText(c, note, noteX, rowY + 50, {font:noteFont, color: active ? '#54d69a' : '#ffb5b5'});
+    drawText(ctx, note, 650, y+50, {font:'18px Inter, Arial, sans-serif', color: active ? '#54d69a' : '#ffb5b5'});
+    y += 96;
+    if (y > 820) break;
   }
-  ly += selectedFoods.length * selectedRowH + gap;
 
-  // Score snapshot
-  fillRoundRect(c, leftX + 25, ly, leftW - 50, scoreH, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(c, 'Build Score Snapshot', leftX + 48, ly + 44, {font:'bold 34px Inter, Arial, sans-serif'});
+  // Build score
+  fillRoundRect(ctx, 65, 860, 810, 220, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
   const scoreBoxes = [
-    ['overall','Overall', metrics.overall], ['survival','Survival', metrics.survival],
-    ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
-    ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support],
-    ['utility','Utility', metrics.utility], ['efficiency','Efficiency', metrics.efficiency]
+    ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
+    ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
+    ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
-  let sxi = leftX + 48, syi = ly + 70;
-  for (let idx = 0; idx < scoreBoxes.length; idx++) {
-    const item = scoreBoxes[idx];
-    const bw = 176, bh = 72;
-    fillRoundRect(c, sxi, syi, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
-    await drawCategoryIconOrFallback(c, item[0], sxi + 12, syi + 12, 28);
-    drawText(c, item[1], sxi + 48, syi + 26, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
-    drawText(c, fmtMaybe(item[2]), sxi + 16, syi + 58, {font:'bold 24px Inter, Arial, sans-serif'});
-    sxi += bw + 12;
-    if ((idx + 1) % 4 === 0) { sxi = leftX + 48; syi += bh + 12; }
-  }
-  ly += scoreH + gap;
+  let sx=88, sy=935;
+  scoreBoxes.forEach(async (item, idx) => {
+    const bw=180, bh=58;
+    fillRoundRect(ctx, sx, sy, bw, bh, 16, 'rgba(20,24,34,.94)', 'rgba(43,51,72,.9)');
+    await drawCategoryIconOrFallback(ctx, item[0], sx+12, sy+12, 28);
+    drawText(ctx, item[1], sx+48, sy+22, {font:'18px Inter, Arial, sans-serif', color:'#aab3c4'});
+    drawText(ctx, fmtMaybe(item[2]), sx+14, sy+48, {font:'bold 28px Inter, Arial, sans-serif'});
+    sx += bw + 12;
+    if ((idx+1)%4===0) { sx=88; sy += bh + 12; }
+  });
 
-  // Shopping
-  fillRoundRect(c, leftX + 25, ly, leftW - 50, shoppingH, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(c, 'Shopping List', leftX + 48, ly + 44, {font:'bold 34px Inter, Arial, sans-serif'});
-  let iy = ly + 86;
+  // Shopping list
+  fillRoundRect(ctx, 65, 1105, 810, 430, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, 1148, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = 1188;
   for (const row of shopping) {
-    await drawIconOrFallback(c, row.name, 'ingredients', leftX + 48, iy - 10, 34);
-    drawText(c, row.name, leftX + 94, iy + 13, {font:'24px Inter, Arial, sans-serif'});
-    const qtyText = `${fmtMaybe(row.qty)} ${row.unit || 'item'}`;
-    const qtyX = leftX + leftW - 50 - textWidth(qtyText, '24px Inter, Arial, sans-serif');
-    drawText(c, qtyText, qtyX, iy + 13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
-    iy += shoppingRowH;
+    await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
+    drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
+    drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 660, iy+13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
+    iy += 44;
+    if (iy > 1510) break;
   }
 
-  // Right column outer
-  fillRoundRect(c, rightX, contentY, rightW, rightPanelH, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
-  let ry = contentY + 28;
-  drawText(c, 'Combined Buffs', rightX + 30, ry + 22, {font:'bold 40px Inter, Arial, sans-serif'});
-  drawText(c, 'Grouped by gameplay category for faster reading.', rightX + 30, ry + 58, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
-  ry += 84;
+  // Right column buffs
+  fillRoundRect(ctx, 930, 250, 830, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  drawText(ctx, 'Combined Buffs', 960, 300, {font:'bold 40px Inter, Arial, sans-serif'});
+  drawText(ctx, 'Grouped by gameplay category for faster reading.', 960, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
 
-  for (const section of categoryCards) {
-    const cat = section.cat;
-    const list = section.list.filter(r => !(els.hideZeroBuffs.checked && Number(r.value) === 0));
-    fillRoundRect(c, rightX + 25, ry, rightW - 50, section.cardH, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-    await drawCategoryIconOrFallback(c, cat, rightX + 48, ry + 12, 30);
-    drawText(c, CATEGORY_LABELS[cat], rightX + 88, ry + 38, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
-    let chipX = rightX + 48, chipY = ry + 58;
+  let cy = 380;
+  for (const cat of CATEGORY_ORDER) {
+    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
+    if (!list.length) continue;
+    fillRoundRect(ctx, 955, cy, 780, 150, 18, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+    await drawCategoryIconOrFallback(ctx, cat, 978, cy+8, 30);
+    drawText(ctx, CATEGORY_LABELS[cat], 1018, cy+34, {font:'bold 28px Inter, Arial, sans-serif', color:categoryAccent(cat)});
+    let chipX = 978, chipY = cy+54;
     for (const row of list.slice(0, 6)) {
       const valText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
-      const w = drawChip(c, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
+      const w = drawChip(ctx, `${row.label}: ${valText}`, chipX, chipY, 'rgba(255,255,255,.04)', '#dfe4ea', 'rgba(255,255,255,.08)');
       chipX += w + 8;
-      if (chipX > rightX + rightW - 80) { chipX = rightX + 48; chipY += 46; }
+      if (chipX > 1600) { chipX = 978; chipY += 46; }
     }
-    ry += section.cardH + 16;
+    cy += 166;
+    if (cy > 1380) break;
   }
 
-  drawText(c, 'Created with Icarus Food Calculator • fernandobacate', rightX + 180, height - 28, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, 1532, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
 
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
   link.download = 'icarus-build.png';
   link.click();
 }
+
 // ---------- Clear / random / init ----------
 // ---------- Clear / random / init ----------
 function clearPlanner(clearPreset=true) {
@@ -1105,6 +1034,7 @@ function clearPlanner(clearPreset=true) {
   renderPresets();
   renderSelectors(Array.from({length:selectedSlotCount()||0},()=>({name:"", qty:1})));
   clearResultsOnly();
+  syncPlannerState();
 }
 function fillRandomBuild() {
   const pool = [...allAdjustedFoods()].sort((a,b)=>b.computedScores.overall-a.computedScores.overall).slice(0, 30);
@@ -1141,6 +1071,7 @@ async function loadFoods() {
   renderRankings();
   renderGenerator();
   clearResultsOnly();
+  syncPlannerState();
   els.footerMeta.textContent = `${fmtNumber(state.data.meta.total_recipes)} recipes • ${fmtNumber(state.data.meta.total_ingredient_rows)} ingredient rows • archetype-aware planner`;
 
   const params = new URLSearchParams(location.search);
@@ -1152,6 +1083,22 @@ async function loadFoods() {
       calculateAll();
     }
   }
+}
+
+function syncPlannerState() {
+  renderFilters();
+  const count = selectedSlotCount();
+  const slotPrompt = document.getElementById('slotPrompt');
+  if (count > 0) {
+    if (slotPrompt) slotPrompt.classList.add('hidden');
+    if (!document.querySelectorAll('.slot').length) {
+      renderSelectors(Array.from({length:count},()=>({name:"", qty:1})));
+    }
+  } else {
+    if (slotPrompt) slotPrompt.classList.remove('hidden');
+    els.selectors.innerHTML = "";
+  }
+  renderGenerator();
 }
 
 els.benchFilter.addEventListener('change', () => renderSelectors(preserveDraft()));
