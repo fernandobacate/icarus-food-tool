@@ -739,6 +739,11 @@ function signatureSeedScore(food, archetype) {
   const signature = archetypeSignatureBonus(food, archetype);
   return signature + target * 1.8 + (food.computedScores?.efficiency || 0) * 0.25 - complexity * 8 - benchPenalty;
 }
+function primaryArchetypeMagnitude(food, archetype) {
+  if (archetype === 'ranged') return getBuffMagnitude(food, /Projectile damage/i);
+  if (archetype === 'melee') return getBuffMagnitude(food, /Melee damage/i);
+  return 0;
+}
 function isSignatureFood(food, archetype) {
   if (archetype === 'ranged') {
     return getBuffMagnitude(food, /Projectile damage|Charge speed|Reload speed|Critical damage/i) > 0;
@@ -752,6 +757,23 @@ function desiredSignatureCount(archetype, slotCap) {
   if (!['ranged', 'melee'].includes(archetype)) return 0;
   return Math.min(2, slotCap);
 }
+function shouldAvoidPriorBuildFood(style, archetype, food, phase, previousFamilies, previousNames) {
+  if (style === 'premium') return false;
+  if (phase === 'core' && ['ranged', 'melee'].includes(archetype) && primaryArchetypeMagnitude(food, archetype) > 0) return false;
+  const fam = effectFamily(food);
+  return previousFamilies.has(fam) || previousNames.has(food.name);
+}
+function addBestFoodFromList(list, build, usedFamilies, usedNames, style, archetype, previousFamilies, previousNames, phase='general') {
+  for (const food of list) {
+    const shouldAvoid = shouldAvoidPriorBuildFood(style, archetype, food, phase, previousFamilies, previousNames);
+    if (shouldAvoid) continue;
+    if (addFoodToBuild(build, usedFamilies, usedNames, food)) return true;
+  }
+  for (const food of list) {
+    if (addFoodToBuild(build, usedFamilies, usedNames, food)) return true;
+  }
+  return false;
+}
 function styleScore(food, archetype, style) {
   const target = targetScore(food, archetype) || 0;
   const complexity = Number(food.ingredient_count || 1);
@@ -761,9 +783,9 @@ function styleScore(food, archetype, style) {
   const signature = archetypeSignatureBonus(food, archetype);
 
   if (archetype === 'ranged' || archetype === 'melee') {
-    if (style === 'budget') return target * 1.15 + signature * 0.95 + overall * 0.04 + efficiency * 4 - complexity * 10 - benchPenalty * 8;
-    if (style === 'practical') return target * 1.65 + signature * 1.1 + overall * 0.06 + efficiency * 3 - complexity * 5 - benchPenalty * 2;
-    return target * 2 + signature * 1.25 + overall * 0.05 + efficiency * 2 - complexity * 1.5;
+    if (style === 'budget') return target * 1.25 + signature * 1 + overall * 0.03 + efficiency * 4 - complexity * 10 - benchPenalty * 8;
+    if (style === 'practical') return target * 1.85 + signature * 1.2 + overall * 0.04 + efficiency * 2.5 - complexity * 4.5 - benchPenalty * 1.5;
+    return target * 2.45 + signature * 1.55 + overall * 0.03 + efficiency * 1.5 - complexity * 1;
   }
 
   if (style === 'budget') return target * 0.8 + efficiency * 18 - complexity * 14 - benchPenalty * 8;
@@ -802,29 +824,26 @@ function generateBuild(style, archetype, priorBuilds=[]) {
         return a.name.localeCompare(b.name);
       });
 
-    for (const food of signatureFoods) {
-      if (build.length >= signatureTarget) break;
-      const fam = effectFamily(food);
-      const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
-      if (shouldAvoid) continue;
-      addFoodToBuild(build, usedFamilies, usedNames, food);
+    const coreFoods = [...signatureFoods]
+      .filter(food => primaryArchetypeMagnitude(food, archetype) > 0)
+      .sort((a, b) => {
+        const diff = (primaryArchetypeMagnitude(b, archetype) * 100 + signatureSeedScore(b, archetype)) - (primaryArchetypeMagnitude(a, archetype) * 100 + signatureSeedScore(a, archetype));
+        if (diff !== 0) return diff;
+        return a.name.localeCompare(b.name);
+      });
+
+    if (coreFoods.length) {
+      addBestFoodFromList(coreFoods, build, usedFamilies, usedNames, style, archetype, previousFamilies, previousNames, 'core');
     }
-    for (const food of signatureFoods) {
-      if (build.length >= signatureTarget) break;
-      addFoodToBuild(build, usedFamilies, usedNames, food);
+    while (build.length < signatureTarget) {
+      const added = addBestFoodFromList(signatureFoods, build, usedFamilies, usedNames, style, archetype, previousFamilies, previousNames, 'signature');
+      if (!added) break;
     }
   }
 
-  for (const food of sorted) {
-    if (build.length >= slotCap) break;
-    const fam = effectFamily(food);
-    const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
-    if (shouldAvoid) continue;
-    addFoodToBuild(build, usedFamilies, usedNames, food);
-  }
-  for (const food of sorted) {
-    if (build.length >= slotCap) break;
-    addFoodToBuild(build, usedFamilies, usedNames, food);
+  while (build.length < slotCap) {
+    const added = addBestFoodFromList(sorted, build, usedFamilies, usedNames, style, archetype, previousFamilies, previousNames, 'general');
+    if (!added) break;
   }
   return build.slice(0, slotCap);
 }
