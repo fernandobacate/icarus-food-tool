@@ -1,4 +1,4 @@
-# Icarus Food Calculator V26
+# Icarus Food Calculator V27
 
 Static GitHub Pages tool for the Icarus community.
 
@@ -19,7 +19,7 @@ Static GitHub Pages tool for the Icarus community.
 - shareable build links
 - PNG export
 
-## V26 notes
+## V27 notes
 - Added Cullinex Backpack support. When enabled, cooked-food modifiers gain +25% effectiveness and recipe duration is increased by +25% for supported cooked foods.
 - Quick presets now respect the current stomach-slot count.
 - Share links preserve the Cullinex state as well.

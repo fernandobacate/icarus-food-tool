@@ -215,7 +215,8 @@ function archetypeLabel(mode) {
 // ---------- Filtering / presets ----------
 function bySelectedSort(a, b, mode) {
   if (mode === "name") return a.name.localeCompare(b.name);
-  return (targetScore(b, mode) || 0) - (targetScore(a, mode) || 0) || a.name.localeCompare(b.name);
+  const diff = quickPresetScore(b, mode) - quickPresetScore(a, mode);
+  return diff !== 0 ? diff : a.name.localeCompare(b.name);
 }
 function deriveBenchList() {
   const metaBenches = state.data?.meta?.benches && Object.keys(state.data.meta.benches).length
@@ -241,13 +242,34 @@ function quickPresetScore(food, mode) {
   const overall = food.computedScores?.overall || 0;
   const efficiency = food.computedScores?.efficiency || 0;
   const complexity = Number(food.ingredient_count || 1);
-  const benchPenalty = benchOrder(food.bench) * 2;
-  if (mode === "efficiency") return efficiency * 30 + overall * 0.06 - complexity * 2 - benchPenalty;
+  const benchPenalty = benchOrder(food.bench);
+  const signature = archetypeSignatureBonus(food, mode);
+
+  if (mode === "efficiency") return efficiency * 30 + overall * 0.06 - complexity * 2 - benchPenalty * 2;
   if (mode === "allround") return overall + efficiency * 10 - complexity * 1.5 - benchPenalty;
-  return target + overall * 0.08 + efficiency * 4 - complexity * 2 - benchPenalty;
+
+  if (mode === 'ranged' || mode === 'melee') {
+    return target * 1.9 + signature * 1.25 + overall * 0.04 + efficiency * 2.5 - complexity * 4 - benchPenalty * 1.5;
+  }
+  if (mode === 'survival') {
+    return target * 1.15 + overall * 0.10 + efficiency * 3.5 - complexity * 3 - benchPenalty * 1.25;
+  }
+  if (mode === 'exploration') {
+    return target * 1.2 + overall * 0.08 + efficiency * 3.5 - complexity * 3 - benchPenalty * 1.25;
+  }
+  if (mode === 'xp_support') {
+    return target * 1.25 + overall * 0.08 + efficiency * 3 - complexity * 2.5 - benchPenalty;
+  }
+  return target + overall * 0.08 + efficiency * 4 - complexity * 2 - benchPenalty * 2;
 }
 function generateQuickPreset(mode) {
   const slotCap = Math.max(1, selectedSlotCount() || 5);
+
+  if (["survival","melee","ranged","exploration","xp_support"].includes(mode)) {
+    const style = (mode === 'ranged' || mode === 'melee') ? 'practical' : 'premium';
+    return generateBuild(style, mode, []).map(f => f.name).slice(0, slotCap);
+  }
+
   const foods = [...allAdjustedFoods()].sort((a, b) => {
     const diff = quickPresetScore(b, mode) - quickPresetScore(a, mode);
     if (diff !== 0) return diff;
