@@ -655,10 +655,34 @@ function renderKPIs() {
   els.kpiGrid.innerHTML = kpis.map(k=>`<article class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div><div class="kpi-sub">${k.sub}</div></article>`).join('');
 }
 
+function contextualRankScore(food, key) {
+  const complexity = Number(food.ingredient_count || 1);
+  const benchPenalty = benchOrder(food.bench);
+  const target = targetScore(food, key) || 0;
+  const overall = food.computedScores?.overall || 0;
+  const efficiency = food.computedScores?.efficiency || 0;
+  const signature = archetypeSignatureBonus(food, key);
+
+  if (key === 'ranged' || key === 'melee') {
+    const primary = primaryArchetypeMagnitude(food, key);
+    return styleScore(food, key, 'premium') + signatureSeedScore(food, key) * 0.35 + primary * 180;
+  }
+  if (key === 'survival') {
+    return target * 1.2 + overall * 0.10 + efficiency * 3.5 - complexity * 3 - benchPenalty * 1.25;
+  }
+  if (key === 'exploration') {
+    return target * 1.25 + overall * 0.08 + efficiency * 3.5 - complexity * 3 - benchPenalty * 1.25;
+  }
+  if (key === 'efficiency') {
+    return efficiency * 30 + overall * 0.06 - complexity * 2 - benchPenalty * 2;
+  }
+  return food.computedScores?.[key] ?? 0;
+}
 function rankValue(food, key) {
   if (key === 'name') return food.name;
   if (key === 'bench') return food.bench;
   if (key === 'tier') return food.tier || '';
+  if (['survival','melee','ranged','exploration','efficiency'].includes(key)) return contextualRankScore(food, key);
   return food.computedScores?.[key] ?? 0;
 }
 function sortRankRows(rows) {
