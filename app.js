@@ -236,17 +236,56 @@ function applyFoodFilter() {
     .filter(f => bench === "All" || f.bench === bench)
     .sort((a,b)=>bySelectedSort(a,b,mode));
 }
+function quickPresetScore(food, mode) {
+  const target = targetScore(food, mode) || 0;
+  const overall = food.computedScores?.overall || 0;
+  const efficiency = food.computedScores?.efficiency || 0;
+  const complexity = Number(food.ingredient_count || 1);
+  const benchPenalty = benchOrder(food.bench) * 2;
+  if (mode === "efficiency") return efficiency * 30 + overall * 0.06 - complexity * 2 - benchPenalty;
+  if (mode === "allround") return overall + efficiency * 10 - complexity * 1.5 - benchPenalty;
+  return target + overall * 0.08 + efficiency * 4 - complexity * 2 - benchPenalty;
+}
+function generateQuickPreset(mode) {
+  const slotCap = Math.max(1, selectedSlotCount() || 5);
+  const foods = [...allAdjustedFoods()].sort((a, b) => {
+    const diff = quickPresetScore(b, mode) - quickPresetScore(a, mode);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
+  const build = [];
+  const usedFamilies = new Set();
+  const usedNames = new Set();
+
+  for (const food of foods) {
+    const fam = effectFamily(food);
+    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
+    build.push(food);
+    usedFamilies.add(fam);
+    usedNames.add(food.name);
+    if (build.length === slotCap) break;
+  }
+
+  if (build.length < slotCap) {
+    for (const food of foods) {
+      if (usedNames.has(food.name)) continue;
+      build.push(food);
+      usedNames.add(food.name);
+      if (build.length === slotCap) break;
+    }
+  }
+
+  return build.slice(0, slotCap).map(f => f.name);
+}
 function presetsForFoods() {
-  const foods = allAdjustedFoods();
-  const topBy = (key, limit = selectedSlotCount() || 5) => [...foods].sort((a,b)=>(targetScore(b,key)||0)-(targetScore(a,key)||0)).slice(0,limit).map(f=>f.name);
   return [
-    { id:"allround", label:"All-round", names: topBy("allround") },
-    { id:"survival", label:"Survival Tank", names: topBy("survival") },
-    { id:"melee", label:"Melee Focus", names: topBy("melee") },
-    { id:"ranged", label:"Ranged Focus", names: topBy("ranged") },
-    { id:"explore", label:"Exploration Rush", names: topBy("exploration") },
-    { id:"xpsupport", label:"XP / Support", names: topBy("xp_support") },
-    { id:"efficiency", label:"Efficiency", names: topBy("efficiency") },
+    { id:"allround", label:"All-round", names: generateQuickPreset("allround") },
+    { id:"survival", label:"Survival Tank", names: generateQuickPreset("survival") },
+    { id:"melee", label:"Melee Focus", names: generateQuickPreset("melee") },
+    { id:"ranged", label:"Ranged Focus", names: generateQuickPreset("ranged") },
+    { id:"explore", label:"Exploration Rush", names: generateQuickPreset("exploration") },
+    { id:"xpsupport", label:"XP / Support", names: generateQuickPreset("xp_support") },
+    { id:"efficiency", label:"Efficiency", names: generateQuickPreset("efficiency") },
   ];
 }
 function renderPresets() {
