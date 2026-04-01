@@ -929,7 +929,7 @@ async function drawCategoryIconOrFallback(ctx, cat, x, y, size=34) {
 }
 async function exportBuildAsPng() {
   if (!state.calculatedFoods.length) { alert("Calculate a build first."); return; }
-  const selectedFoods = state.calculatedFoods;
+  const selectedFoods = state.calculatedFoods.filter(Boolean);
   const activeFoods = aggregateEffectFoods(selectedFoods);
   const shopping = aggregateIngredients(selectedFoods).slice(0, 16);
   const buffTotals = sumBuffs(activeFoods);
@@ -945,8 +945,27 @@ async function exportBuildAsPng() {
     return acc;
   }, {survival:0, melee:0, ranged:0, exploration:0, xp_support:0, utility:0, overall:0, efficiency:0});
 
+  const recipeCount = selectedFoods.length;
+  const recipeCardHeight = 82;
+  const recipeCardGap = 14;
+  const recipeSectionTop = 380;
+  const recipeSectionBottom = recipeSectionTop + (recipeCount * (recipeCardHeight + recipeCardGap)) - recipeCardGap;
+  const scoreSectionTop = Math.max(860, recipeSectionBottom + 44);
+  const scoreSectionHeight = 260;
+  const shoppingSectionTop = scoreSectionTop + scoreSectionHeight + 25;
+  const shoppingSectionHeight = 390;
+  const leftColumnBottom = shoppingSectionTop + shoppingSectionHeight + 25;
+
+  const visibleBuffCategories = CATEGORY_ORDER.filter(cat => {
+    const list = (categorized[cat] || []).filter(r => !(els.hideZeroBuffs.checked && Number(r.value)===0));
+    return list.length;
+  });
+  const rightColumnBottom = 380 + (visibleBuffCategories.length * 166) + 20;
+
+  const footerY = Math.max(leftColumnBottom, rightColumnBottom, 1490) + 22;
   const canvas = document.createElement('canvas');
-  canvas.width = 1800; canvas.height = 1600;
+  canvas.width = 1800;
+  canvas.height = Math.max(1600, footerY + 52);
   const ctx = canvas.getContext('2d');
 
   // Background
@@ -979,34 +998,33 @@ async function exportBuildAsPng() {
   drawText(ctx, `Stomach slots: ${selectedSlotCount() || selectedFoods.length} • Active effects: ${activeFoods.length}`, 70, 198, {font:'18px Inter, Arial, sans-serif', color:'#dfe4ea'});
 
   // Left column build
-  fillRoundRect(ctx, 40, 250, 860, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  fillRoundRect(ctx, 40, 250, 860, leftColumnBottom - 250, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
   drawText(ctx, 'Selected Recipes', 70, 300, {font:'bold 40px Inter, Arial, sans-serif'});
   drawText(ctx, `${activeFoods.length} active effects • ${selectedFoods.length} crafted selections`, 70, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
-  let y = 380;
-  for (let i=0; i<selectedFoods.length; i++) {
+  let y = recipeSectionTop;
+  for (let i = 0; i < selectedFoods.length; i++) {
     const food = selectedFoods[i];
-    fillRoundRect(ctx, 65, y, 810, 82, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
+    fillRoundRect(ctx, 65, y, 810, recipeCardHeight, 18, 'rgba(255,255,255,.03)', 'rgba(255,255,255,.08)');
     await drawIconOrFallback(ctx, food.name, 'recipes', 82, y+20, 42);
     drawText(ctx, `${i+1}. ${food.name}`, 138, y+36, {font:'bold 28px Inter, Arial, sans-serif'});
     drawText(ctx, `${food.bench} • ${fmtMaybe(food.adjustedDuration_s ?? food.duration_s)}s • x${food.craftQty} craft`, 138, y+64, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
     const fam = effectFamily(food);
-    const active = activeFoods.find(f=>effectFamily(f)===fam && f.name===food.name);
+    const active = activeFoods.find(f => effectFamily(f) === fam && f.name === food.name);
     const note = active ? 'Active effect' : 'Strict-mode refresh / duplicate';
     drawText(ctx, note, 650, y+50, {font:'18px Inter, Arial, sans-serif', color: active ? '#54d69a' : '#ffb5b5'});
-    y += 96;
-    if (y > 820) break;
+    y += recipeCardHeight + recipeCardGap;
   }
 
   // Build score
-  fillRoundRect(ctx, 65, 860, 810, 260, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Build Score Snapshot', 88, 905, {font:'bold 34px Inter, Arial, sans-serif'});
+  fillRoundRect(ctx, 65, scoreSectionTop, 810, scoreSectionHeight, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Build Score Snapshot', 88, scoreSectionTop + 45, {font:'bold 34px Inter, Arial, sans-serif'});
   const scoreBoxes = [
     ['survival','Survival', metrics.survival], ['melee','Melee', metrics.melee], ['ranged','Ranged', metrics.ranged],
     ['exploration','Exploration', metrics.exploration], ['xp_support','XP / Support', metrics.xp_support], ['utility','Utility', metrics.utility],
     ['overall','Overall', metrics.overall], ['efficiency','Efficiency', metrics.efficiency]
   ];
   const scoreStartX = 88;
-  const scoreStartY = 935;
+  const scoreStartY = scoreSectionTop + 75;
   const scoreCols = 4;
   const bw = 184, bh = 76, gapX = 12, gapY = 14;
   for (let idx = 0; idx < scoreBoxes.length; idx++) {
@@ -1022,19 +1040,19 @@ async function exportBuildAsPng() {
   }
 
   // Shopping list
-  fillRoundRect(ctx, 65, 1145, 810, 390, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
-  drawText(ctx, 'Shopping List', 88, 1188, {font:'bold 34px Inter, Arial, sans-serif'});
-  let iy = 1228;
+  fillRoundRect(ctx, 65, shoppingSectionTop, 810, shoppingSectionHeight, 20, 'rgba(255,255,255,.025)', 'rgba(255,255,255,.08)');
+  drawText(ctx, 'Shopping List', 88, shoppingSectionTop + 43, {font:'bold 34px Inter, Arial, sans-serif'});
+  let iy = shoppingSectionTop + 83;
   for (const row of shopping) {
     await drawIconOrFallback(ctx, row.name, 'ingredients', 88, iy-10, 34);
     drawText(ctx, row.name, 134, iy+13, {font:'24px Inter, Arial, sans-serif'});
     drawText(ctx, `${fmtMaybe(row.qty)} ${row.unit || 'item'}`, 660, iy+13, {font:'24px Inter, Arial, sans-serif', color:'#f0ddb0'});
     iy += 44;
-    if (iy > 1510) break;
+    if (iy > shoppingSectionTop + shoppingSectionHeight - 20) break;
   }
 
   // Right column buffs
-  fillRoundRect(ctx, 930, 250, 830, 1310, 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
+  fillRoundRect(ctx, 930, 250, 830, Math.max(1310, footerY - 250 - 10), 24, 'rgba(20,24,34,.88)', 'rgba(43,51,72,.9)');
   drawText(ctx, 'Combined Buffs', 960, 300, {font:'bold 40px Inter, Arial, sans-serif'});
   drawText(ctx, 'Grouped by gameplay category for faster reading.', 960, 336, {font:'22px Inter, Arial, sans-serif', color:'#aab3c4'});
 
@@ -1053,10 +1071,9 @@ async function exportBuildAsPng() {
       if (chipX > 1600) { chipX = 978; chipY += 46; }
     }
     cy += 166;
-    if (cy > 1380) break;
   }
 
-  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, 1532, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, footerY, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
 
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
