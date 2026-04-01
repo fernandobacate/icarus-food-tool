@@ -99,6 +99,41 @@ function categoryIconMarkup(cat, className="category-icon") {
   const fallback = CATEGORY_ICONS[cat] || '•';
   return `<div class="${className}"><img src="assets/categories/${cat}.png" alt="${label}" onerror="this.remove()"><span class="category-icon-fallback">${fallback}</span></div>`;
 }
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function slotHeaderMarkup(index, name = "") {
+  const safeName = escapeHtml(name);
+  if (safeName) {
+    return `
+      <div class="slot-header-main">
+        ${iconMarkup(name,'recipes','ingredient-mini slot-picked-icon')}
+        <div class="slot-title-block">
+          <strong>${safeName}</strong>
+          <span>Slot ${index + 1}</span>
+        </div>
+      </div>
+      <span class="slot-status slot-status-filled">Selected</span>`;
+  }
+  return `
+    <div class="slot-header-main">
+      <div class="slot-title-block">
+        <strong>Slot ${index + 1}</strong>
+        <span>Choose a recipe</span>
+      </div>
+    </div>
+    <span class="slot-status">Empty</span>`;
+}
+function updateSlotHeader(index, name = "") {
+  const header = document.querySelector(`#slot-wrap-${index} .slot-header`);
+  if (!header) return;
+  header.innerHTML = slotHeaderMarkup(index, name);
+}
 function benchOrder(bench) {
   return {"Kitchen Bench":1,"Electric Stove":2,"Smoker":3}[bench] || 9;
 }
@@ -326,6 +361,7 @@ function renderPresets() {
         if (!slot || !qty) return;
         slot.value = name;
         qty.value = 1;
+        updateSlotHeader(i, name);
       });
       renderPresets();
     });
@@ -354,7 +390,7 @@ function renderSelectors(preserve = []) {
     const entry = preserve[i] || {name:"", qty:1};
     els.selectors.insertAdjacentHTML("beforeend", `
       <div class="slot" id="slot-wrap-${i}">
-        <div class="slot-header"><strong>Slot ${i+1}</strong><span>${entry.name ? "Draft selected" : "Empty"}</span></div>
+        <div class="slot-header">${slotHeaderMarkup(i, entry.name || "")}</div>
         <div class="slot-controls">
           <div class="slot-input-wrap">
             <input class="wide-input" id="slot-${i}" placeholder="Click or type to browse..." autocomplete="off" value="${(entry.name||'').replace(/"/g,'&quot;')}">
@@ -404,6 +440,7 @@ function setupAutocomplete(index) {
       el.addEventListener('mousedown', ev => {
         ev.preventDefault();
         input.value = el.dataset.name;
+        updateSlotHeader(index, el.dataset.name);
         close();
       });
     });
@@ -421,7 +458,8 @@ function setupAutocomplete(index) {
     return items.slice(0, 80);
   }
   input.addEventListener('focus', () => { activeIndex = -1; openWith(visibleItems()); });
-  input.addEventListener('input', () => { activeIndex = -1; openWith(visibleItems()); });
+  input.addEventListener('input', () => { activeIndex = -1; updateSlotHeader(index, input.value.trim()); openWith(visibleItems()); });
+  input.addEventListener('blur', () => { setTimeout(() => updateSlotHeader(index, input.value.trim()), 0); });
   input.addEventListener('keydown', (e) => {
     const items = visibleItems();
     if (list.classList.contains('hidden') && (e.key === 'ArrowDown' || e.key === 'Enter')) {
@@ -445,7 +483,10 @@ function setupAutocomplete(index) {
       if (items.length) {
         e.preventDefault();
         const selected = items[Math.max(0, activeIndex)];
-        if (selected) input.value = selected.name;
+        if (selected) {
+          input.value = selected.name;
+          updateSlotHeader(index, selected.name);
+        }
         close();
       }
     } else if (e.key === 'Escape') close();
@@ -950,6 +991,7 @@ function renderGenerator() {
       builds[idx].foods.slice(0, selectedSlotCount() || 5).forEach((food, i) => {
         document.getElementById(`slot-${i}`).value = food.name;
         document.getElementById(`slot-qty-${i}`).value = 1;
+        updateSlotHeader(i, food.name);
       });
       window.scrollTo({top: document.getElementById('plannerPanel').offsetTop - 20, behavior:'smooth'});
     });
@@ -1014,6 +1056,7 @@ function applyBuildState(payload) {
   (payload.foods || []).slice(0, selectedSlotCount() || 5).forEach((item, i) => {
     document.getElementById(`slot-${i}`).value = item.name || "";
     document.getElementById(`slot-qty-${i}`).value = item.qty || 1;
+    updateSlotHeader(i, item.name || "");
   });
 }
 async function loadImageSafe(src) {

@@ -78,7 +78,14 @@ button:hover{filter:brightness(1.08)}
   border:1px solid #33405b;border-radius:18px;padding:14px; position:relative; overflow:visible; z-index:1;
 }
 .slot.open{z-index:25000}
-.slot-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--muted);font-size:.85rem}
+.slot-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;color:var(--muted);font-size:.85rem}
+.slot-header-main{display:flex;align-items:center;gap:10px;min-width:0}
+.slot-title-block{display:flex;flex-direction:column;min-width:0}
+.slot-title-block strong{color:var(--text);font-size:1rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.slot-title-block span{color:var(--muted);font-size:.78rem}
+.slot-picked-icon{width:28px;height:28px;flex-basis:28px;border-radius:9px}
+.slot-status{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.slot-status-filled{color:#7ae0b0;border-color:rgba(122,224,176,.18);background:rgba(42,130,92,.12)}
 .slot-controls{display:grid;grid-template-columns:1fr 96px;gap:10px;align-items:end}
 .slot-input-wrap{position:relative}
 .slot input{width:100%;min-width:0}
