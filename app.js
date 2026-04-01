@@ -711,36 +711,120 @@ function candidatePool(foods, style) {
   if (style === 'practical') return foods.filter(f => (f.ingredient_count || 0) <= 6);
   return foods;
 }
-function styleScore(food, archetype, style) {
-  const target = targetScore(food, archetype);
+function getBuffMagnitude(food, pattern) {
+  const entry = (food.adjustedBuffEntries || []).find(([label]) => pattern.test(label));
+  return entry ? Math.abs(Number(entry[1] || 0)) : 0;
+}
+function archetypeSignatureBonus(food, archetype) {
+  if (archetype === 'ranged') {
+    const projectile = getBuffMagnitude(food, /Projectile damage/i);
+    const charge = getBuffMagnitude(food, /Charge speed/i);
+    const reload = getBuffMagnitude(food, /Reload speed/i);
+    const crit = getBuffMagnitude(food, /Critical damage/i);
+    return projectile * 20 + charge * 5 + reload * 5 + crit * 3;
+  }
+  if (archetype === 'melee') {
+    const meleeDamage = getBuffMagnitude(food, /Melee damage/i);
+    const meleeSpeed = getBuffMagnitude(food, /Melee attack speed/i);
+    const returnDamage = getBuffMagnitude(food, /Return melee damage chance|Return melee damage/i);
+    const crit = getBuffMagnitude(food, /Critical damage/i);
+    return meleeDamage * 18 + meleeSpeed * 7 + returnDamage * 4 + crit * 3;
+  }
+  return 0;
+}
+function signatureSeedScore(food, archetype) {
+  const target = targetScore(food, archetype) || 0;
   const complexity = Number(food.ingredient_count || 1);
-  if (style === 'budget') return target * 0.8 + food.computedScores.efficiency * 18 - complexity * 14 - benchOrder(food.bench) * 8;
-  if (style === 'practical') return target + food.computedScores.efficiency * 10 - complexity * 5 - benchOrder(food.bench) * 2;
-  return target * 1.15 + food.computedScores.overall * 0.18 - complexity * 1.5;
+  const benchPenalty = benchOrder(food.bench) * 10;
+  const signature = archetypeSignatureBonus(food, archetype);
+  return signature + target * 1.8 + (food.computedScores?.efficiency || 0) * 0.25 - complexity * 8 - benchPenalty;
+}
+function isSignatureFood(food, archetype) {
+  if (archetype === 'ranged') {
+    return getBuffMagnitude(food, /Projectile damage|Charge speed|Reload speed|Critical damage/i) > 0;
+  }
+  if (archetype === 'melee') {
+    return getBuffMagnitude(food, /Melee damage|Melee attack speed|Return melee damage chance|Return melee damage|Critical damage/i) > 0;
+  }
+  return false;
+}
+function desiredSignatureCount(archetype, slotCap) {
+  if (!['ranged', 'melee'].includes(archetype)) return 0;
+  return Math.min(2, slotCap);
+}
+function styleScore(food, archetype, style) {
+  const target = targetScore(food, archetype) || 0;
+  const complexity = Number(food.ingredient_count || 1);
+  const benchPenalty = benchOrder(food.bench);
+  const overall = food.computedScores.overall || 0;
+  const efficiency = food.computedScores.efficiency || 0;
+  const signature = archetypeSignatureBonus(food, archetype);
+
+  if (archetype === 'ranged' || archetype === 'melee') {
+    if (style === 'budget') return target * 1.15 + signature * 0.95 + overall * 0.04 + efficiency * 4 - complexity * 10 - benchPenalty * 8;
+    if (style === 'practical') return target * 1.65 + signature * 1.1 + overall * 0.06 + efficiency * 3 - complexity * 5 - benchPenalty * 2;
+    return target * 2 + signature * 1.25 + overall * 0.05 + efficiency * 2 - complexity * 1.5;
+  }
+
+  if (style === 'budget') return target * 0.8 + efficiency * 18 - complexity * 14 - benchPenalty * 8;
+  if (style === 'practical') return target + efficiency * 10 - complexity * 5 - benchPenalty * 2;
+  return target * 1.15 + overall * 0.18 - complexity * 1.5;
+}
+function addFoodToBuild(build, usedFamilies, usedNames, food) {
+  const fam = effectFamily(food);
+  if (usedFamilies.has(fam) || usedNames.has(food.name)) return false;
+  build.push(food);
+  usedFamilies.add(fam);
+  usedNames.add(food.name);
+  return true;
 }
 function generateBuild(style, archetype, priorBuilds=[]) {
   const slotCap = Math.max(1, selectedSlotCount() || 5);
   const foods = candidatePool(allAdjustedFoods(), style);
-  const previousNames = new Set(priorBuilds.flat().map(f=>f.name));
+  const previousNames = new Set(priorBuilds.flat().map(f => f.name));
   const previousFamilies = new Set(priorBuilds.flat().map(effectFamily));
-  const sorted = [...foods].sort((a,b)=>styleScore(b, archetype, style)-styleScore(a, archetype, style));
+  const sorted = [...foods].sort((a, b) => {
+    const diff = styleScore(b, archetype, style) - styleScore(a, archetype, style);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
   const build = [];
   const usedFamilies = new Set();
   const usedNames = new Set();
+  const signatureTarget = desiredSignatureCount(archetype, slotCap);
+
+  if (signatureTarget > 0) {
+    const signatureFoods = [...foods]
+      .filter(food => isSignatureFood(food, archetype))
+      .sort((a, b) => {
+        const diff = signatureSeedScore(b, archetype) - signatureSeedScore(a, archetype);
+        if (diff !== 0) return diff;
+        return a.name.localeCompare(b.name);
+      });
+
+    for (const food of signatureFoods) {
+      if (build.length >= signatureTarget) break;
+      const fam = effectFamily(food);
+      const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
+      if (shouldAvoid) continue;
+      addFoodToBuild(build, usedFamilies, usedNames, food);
+    }
+    for (const food of signatureFoods) {
+      if (build.length >= signatureTarget) break;
+      addFoodToBuild(build, usedFamilies, usedNames, food);
+    }
+  }
 
   for (const food of sorted) {
+    if (build.length >= slotCap) break;
     const fam = effectFamily(food);
-    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
     const shouldAvoid = previousFamilies.has(fam) || previousNames.has(food.name);
     if (shouldAvoid) continue;
-    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
-    if (build.length === slotCap) break;
+    addFoodToBuild(build, usedFamilies, usedNames, food);
   }
   for (const food of sorted) {
-    const fam = effectFamily(food);
-    if (usedFamilies.has(fam) || usedNames.has(food.name)) continue;
-    build.push(food); usedFamilies.add(fam); usedNames.add(food.name);
-    if (build.length === slotCap) break;
+    if (build.length >= slotCap) break;
+    addFoodToBuild(build, usedFamilies, usedNames, food);
   }
   return build.slice(0, slotCap);
 }

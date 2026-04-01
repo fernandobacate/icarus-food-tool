@@ -1,4 +1,4 @@
-# Icarus Food Calculator V23
+# Icarus Food Calculator V25
 
 Static GitHub Pages tool for the Icarus community.
 
@@ -19,7 +19,7 @@ Static GitHub Pages tool for the Icarus community.
 - shareable build links
 - PNG export
 
-## V23 notes
+## V25 notes
 - Added Cullinex Backpack support. When enabled, cooked-food modifiers gain +25% effectiveness and recipe duration is increased by +25% for supported cooked foods.
 - Quick presets now respect the current stomach-slot count.
 - Share links preserve the Cullinex state as well.
@@ -48,3 +48,6 @@ Drop PNG files into `assets/categories/` using these names:
 - `efficiency.png`
 
 Recommended size: 64x64 PNG with transparent background.
+
+- Archetype build generation now gives substantially more weight to signature offensive stats, especially for Ranged and Melee builds.
+- Ranged and Melee suggested builds now seed key signature foods earlier so core archetype-defining recipes are less likely to be pushed out by generic high-overall foods.
