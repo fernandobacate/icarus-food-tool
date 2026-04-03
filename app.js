@@ -246,6 +246,30 @@ function archetypeLabel(mode) {
     exploration:"Exploration", xp_support:"XP / Support", efficiency:"Efficiency"
   }[mode] || "All-round";
 }
+function buildRationale(archetype, style) {
+  const base = {
+    allround: 'Balances raw overall score with solid coverage across categories.',
+    survival: 'Leans into health, regen, resistances, and steady sustain.',
+    melee: 'Prioritizes melee signature stats first, then overall support.',
+    ranged: 'Prioritizes projectile damage first, then reload/charge support and sustain.',
+    exploration: 'Favors stamina economy, movement, and expedition comfort.',
+    xp_support: 'Pushes XP value and support utility without ignoring efficiency.',
+    efficiency: 'Looks for strong value per recipe complexity and bench cost.'
+  }[archetype] || 'Balanced build logic.';
+  const styleTag = style === 'budget'
+    ? ' Lower complexity and easier benches get extra weight here.'
+    : style === 'practical'
+      ? ' This version aims for a cleaner middle ground between power and manageability.'
+      : ' This version is allowed to be greedier about top-end power.';
+  return base + styleTag;
+}
+function flashButton(button, text, timeout = 1400) {
+  if (!button) return;
+  const old = button.dataset.originalText || button.textContent;
+  button.dataset.originalText = old;
+  button.textContent = text;
+  setTimeout(() => { button.textContent = button.dataset.originalText || old; }, timeout);
+}
 
 // ---------- Filtering / presets ----------
 function bySelectedSort(a, b, mode) {
@@ -562,7 +586,7 @@ function renderCombinedBuffs(activeFoods) {
     if (!list.length) return '';
     const tableRows = list.map(row => {
       const valueText = /Food on consume/i.test(row.label) ? foodOnConsumeDisplay(row.value) : fmtMaybe(row.value);
-      return `<tr><td>${row.label}</td><td class="number">${valueText}</td></tr>`;
+      return `<tr><td>${row.label}</td><td class="number"><span class="stat-total"><span class="stat-value-inline">${valueText}</span></span></td></tr>`;
     }).join('');
     return `<section class="buff-category ${CATEGORY_COLORS[cat]}">
       <div class="category-head">
@@ -594,7 +618,7 @@ function renderShopping(selectedFoods) {
   const rows = aggregateIngredients(selectedFoods);
   els.shoppingWrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Ingredient</th><th class="number">Total Qty</th><th>Unit</th><th>Used by</th></tr></thead><tbody>${rows.map(row=>`
   <tr><td><div class="ingredient-cell">${iconMarkup(row.name,'ingredients','ingredient-mini')}<span>${row.name}</span></div></td>
-  <td class="number">${fmtMaybe(row.qty)}</td><td>${row.unit || 'item'}</td><td>${[...new Set(row.recipes)].join(', ')}</td></tr>`).join('')}</tbody></table></div>`;
+  <td class="number"><span class="stat-total"><span class="stat-value-inline">${fmtMaybe(row.qty)}</span></span></td><td>${row.unit || 'item'}</td><td>${[...new Set(row.recipes)].join(', ')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderSelectedCards(selectedFoods, activeFoods) {
   const activeFamilies = new Set(activeFoods.map(effectFamily));
@@ -981,6 +1005,7 @@ function renderGenerator() {
         <div class="build-metric"><div class="build-metric-label">Melee</div><div class="build-metric-value">${fmtMaybe(metrics.melee)}</div></div>
         <div class="build-metric"><div class="build-metric-label">Ranged</div><div class="build-metric-value">${fmtMaybe(metrics.ranged)}</div></div>
       </div>
+      <div class="build-note">${buildRationale(archetype, item.style)}</div>
       <div class="small-muted">Use this build, then set craft quantities in the planner before calculating the final shopping list.</div>
       <button class="use-build-btn" data-build="${idx}">Use this build</button>
     </article>`;
@@ -1304,7 +1329,7 @@ async function exportBuildAsPng() {
     cy += 166;
   }
 
-  drawText(ctx, 'Created with Icarus Food Calculator • fernandobacate', 1110, footerY, {font:'20px Inter, Arial, sans-serif', color:'#aab3c4'});
+  drawText(ctx, 'Built with Icarus Food Calculator • fernandobacate', 1095, footerY, {font:'20px Inter, Arial, sans-serif', color:'rgba(220,228,239,.72)'});
 
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
@@ -1407,23 +1432,23 @@ els.randomBuildBtn.addEventListener('click', fillRandomBuild);
 els.copySummaryBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(buildSummaryText(state.calculatedFoods), () => {
-    const old = els.copySummaryBtn.textContent; els.copySummaryBtn.textContent = 'Summary copied'; setTimeout(()=>els.copySummaryBtn.textContent = old, 1400);
+    flashButton(els.copySummaryBtn, 'Summary copied');
   });
 });
 els.copyShoppingBtn.addEventListener('click', () => {
   if (!state.calculatedFoods.length) return alert('Calculate a build first.');
   copyText(shoppingText(state.calculatedFoods), () => {
-    const old = els.copyShoppingBtn.textContent; els.copyShoppingBtn.textContent = 'Shopping copied'; setTimeout(()=>els.copyShoppingBtn.textContent = old, 1400);
+    flashButton(els.copyShoppingBtn, 'Shopping copied');
   });
 });
 els.copyLinkBtn.addEventListener('click', () => {
   const build = encodeBuildState();
   const url = `${location.origin}${location.pathname}?build=${encodeURIComponent(build)}`;
   copyText(url, () => {
-    const old = els.copyLinkBtn.textContent; els.copyLinkBtn.textContent = 'Link copied'; setTimeout(()=>els.copyLinkBtn.textContent = old, 1400);
+    flashButton(els.copyLinkBtn, 'Link copied');
   });
 });
-els.exportPngBtn.addEventListener('click', exportBuildAsPng);
+els.exportPngBtn.addEventListener('click', async () => { await exportBuildAsPng(); flashButton(els.exportPngBtn, 'Image exported'); });
 els.generatorArchetype.addEventListener('change', renderGenerator);
 
 loadFoods();

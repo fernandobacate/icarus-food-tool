@@ -203,3 +203,32 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 .category-icon-fallback{font-size:1rem;line-height:1}
 .score-icon .category-icon-fallback{font-size:.96rem}
 .category-head h3{margin:0;font-size:1rem}
+
+
+.control-help{display:block;color:#7f8aa1;font-size:.73rem;font-weight:500;line-height:1.25;max-width:220px}
+#calculateBtn{background:linear-gradient(180deg, rgba(250,204,21,.34), rgba(245,158,11,.20));border-color:rgba(250,204,21,.42);box-shadow:0 0 0 1px rgba(250,204,21,.12), 0 10px 24px rgba(245,158,11,.12)}
+#calculateBtn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.share-btn{border-color:rgba(96,165,250,.30);background:linear-gradient(180deg, rgba(51,65,85,.95), rgba(30,41,59,.95));color:#dbeafe}
+.share-btn:hover{border-color:rgba(96,165,250,.46)}
+.slot{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.slot:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.18);border-color:rgba(199,155,57,.22)}
+.preset-btn{transition:all .15s ease}
+.preset-btn:hover{border-color:rgba(199,155,57,.22);background:rgba(199,155,57,.07);color:#f6e8be}
+.preset-btn.active{border-color:rgba(250,204,21,.38);background:linear-gradient(180deg, rgba(250,204,21,.16), rgba(245,158,11,.10));color:#fff2c4;box-shadow:0 0 0 1px rgba(250,204,21,.12)}
+.buff-category.survival{box-shadow:inset 0 0 0 1px rgba(74,222,128,.16)}
+.buff-category.melee{box-shadow:inset 0 0 0 1px rgba(251,146,60,.16)}
+.buff-category.ranged{box-shadow:inset 0 0 0 1px rgba(96,165,250,.16)}
+.buff-category.exploration{box-shadow:inset 0 0 0 1px rgba(250,204,21,.16)}
+.buff-category.xp_support{box-shadow:inset 0 0 0 1px rgba(192,132,252,.16)}
+.buff-category.utility{box-shadow:inset 0 0 0 1px rgba(244,114,182,.14)}
+.score-card.survival .score-value{color:#86efac}
+.score-card.melee .score-value{color:#fdba74}
+.score-card.ranged .score-value{color:#93c5fd}
+.score-card.exploration .score-value{color:#fde047}
+.score-card.xp_support .score-value{color:#d8b4fe}
+.score-card.utility .score-value{color:#f9a8d4}
+.stat-total{display:flex;justify-content:flex-end;align-items:baseline;gap:6px}
+.stat-label-inline{color:#7f8aa1;font-size:.82rem}
+.stat-value-inline{font-weight:800;color:#fff}
+.build-note{padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);color:#d8dee9;font-size:.88rem;line-height:1.35}
+.ghost-btn,.secondary,.preset-btn,.build-card button,#calculateBtn{transition:filter .15s ease, transform .15s ease, border-color .15s ease, box-shadow .15s ease}

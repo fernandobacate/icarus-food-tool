@@ -23,7 +23,7 @@
         <button class="ghost-btn" id="randomBuildBtn">Random top build</button>
         <button class="ghost-btn" id="copySummaryBtn">Copy build summary</button>
         <button class="ghost-btn" id="copyShoppingBtn">Copy shopping list</button>
-        <button class="ghost-btn" id="copyLinkBtn">Copy build link</button>
+        <button class="ghost-btn share-btn" id="copyLinkBtn">Share build link</button>
         <button class="ghost-btn" id="exportPngBtn">Export build image</button>
       </div>
     </header>
@@ -57,14 +57,14 @@
             </select>
           </label>
           <label>
-            <span>Carnivore talent</span>
+            <span>Carnivore talent <small class="control-help">Smoker foods get boosted when enabled.</small></span>
             <select id="carnivoreToggle">
               <option value="off" selected>Off</option>
               <option value="on">On</option>
             </select>
           </label>
           <label>
-            <span>Cullinex Backpack</span>
+            <span>Cullinex Backpack <small class="control-help">+25% cooked-food buff power and duration.</small></span>
             <select id="cullinexToggle">
               <option value="off" selected>No</option>
               <option value="on">Yes</option>
@@ -75,7 +75,7 @@
             <select id="benchFilter"></select>
           </label>
           <label>
-            <span>Sort foods</span>
+            <span>Sort foods <small class="control-help">Build-aware ordering for archetype sorts.</small></span>
             <select id="sortFoods">
               <option value="name">Name (A–Z)</option>
               <option value="overall">Overall score</option>
